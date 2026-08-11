@@ -5,15 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="쿠폰콕 — 매장에 들어가면 가장 유리한 쿠폰과 통신사 혜택을 알려주는 iPhone 앱" />
     <title>쿠폰콕 | 지금, 가장 이득인 쿠폰</title>
+    <link rel="icon" type="image/png" href="assets/couponcok-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
+    <style>
+      .brand-icon { width: 31px; height: 31px; border-radius: 10px; box-shadow: 0 7px 17px #d789a66b; }
+      img.app-icon { display: block; width: 34px; height: 34px; object-fit: cover; background: transparent; border-radius: 12px; box-shadow: 0 7px 17px #d789a66b; }
+    </style>
   </head>
   <body>
     <div class="aurora aurora-one"></div><div class="aurora aurora-two"></div>
     <header class="nav wrap">
-      <a class="brand" href="#top" aria-label="쿠폰콕 홈"><span class="ticket-mark">✦</span><span>쿠폰콕</span></a>
+      <a class="brand" href="#top" aria-label="쿠폰콕 홈"><img class="brand-icon" src="assets/couponcok-icon.png" alt="" /><span>쿠폰콕</span></a>
       <nav><a href="#how">서비스</a><a href="#trust">안전하게</a><a class="github" href="https://github.com/jhparktime/TicketCock" target="_blank" rel="noreferrer">GitHub ↗</a></nav>
     </header>
 
@@ -32,7 +37,7 @@
           <div class="phone">
             <div class="dynamic-island"></div><div class="status"><b>9:41</b><span>⌁ ◒ ▰</span></div>
             <div class="phone-content">
-              <div class="app-head"><div><small>8월 12일 화요일</small><h2>안녕하세요,<br />재현님 <span>✦</span></h2></div><div class="app-icon">✦</div></div>
+              <div class="app-head"><div><small>8월 12일 화요일</small><h2>안녕하세요,<br />재현님 <span>✦</span></h2></div><img class="app-icon" src="assets/couponcok-icon.png" alt="쿠폰콕" /></div>
               <div class="location-pill">⌖ &nbsp; 투썸플레이스 수원시청점</div>
               <div class="saving-card"><p>지금 <strong>3,000원</strong> 더<br />절약할 수 있어요</p><small>✦ 위치 기반 추천 · 시연용</small></div>
               <p class="section-label">지금 사용할 수 있는 쿠폰</p>
@@ -51,6 +56,6 @@
 
       <section class="cta wrap"><p>COUPONCOK</p><h2>오늘의 쿠폰을,<br />놓치지 마세요.</h2><a class="button primary" href="https://github.com/jhparktime/TicketCock" target="_blank" rel="noreferrer">GitHub에서 코드 보기 <b>→</b></a></section>
     </main>
-    <footer class="wrap"><a class="brand" href="#top"><span class="ticket-mark">✦</span><span>쿠폰콕</span></a><p>CouponCok MVP · Suwon, Korea</p><a href="https://github.com/jhparktime/TicketCock" target="_blank" rel="noreferrer">GitHub ↗</a></footer>
+    <footer class="wrap"><a class="brand" href="#top"><img class="brand-icon" src="assets/couponcok-icon.png" alt="" /><span>쿠폰콕</span></a><p>CouponCok MVP · Suwon, Korea</p><a href="https://github.com/jhparktime/TicketCock" target="_blank" rel="noreferrer">GitHub ↗</a></footer>
   </body>
 </html>
