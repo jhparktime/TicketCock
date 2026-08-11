@@ -1,0 +1,53 @@
+swagger: "2.0"
+info:
+  title: CouponPilot mobile API
+  description: Firebase-authenticated iOS gateway for the private CouponPilot Cloud Run service.
+  version: "1.0.0"
+schemes: [https]
+produces: [application/json]
+securityDefinitions:
+  firebase:
+    type: oauth2
+    flow: implicit
+    authorizationUrl: ""
+    x-google-issuer: https://securetoken.google.com/proj-aj21-211200020328
+    x-google-jwks_uri: https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com
+    x-google-audiences: proj-aj21-211200020328
+paths:
+  /v1/stores/nearby:
+    get:
+      operationId: nearbyStores
+      security: [{firebase: []}]
+      x-google-backend:
+        address: https://coupon-pilot-api-akcfigyefa-du.a.run.app
+        jwt_audience: https://coupon-pilot-api-akcfigyefa-du.a.run.app
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 60.0
+      responses: {"200": {description: OK}}
+  /v1/coupons/normalize:
+    post:
+      operationId: normalizeCoupon
+      security: [{firebase: []}]
+      x-google-backend:
+        address: https://coupon-pilot-api-akcfigyefa-du.a.run.app
+        jwt_audience: https://coupon-pilot-api-akcfigyefa-du.a.run.app
+        path_translation: APPEND_PATH_TO_ADDRESS
+      responses: {"200": {description: OK}}
+  /v1/benefits/search:
+    get:
+      operationId: searchBenefits
+      security: [{firebase: []}]
+      x-google-backend:
+        address: https://coupon-pilot-api-akcfigyefa-du.a.run.app
+        jwt_audience: https://coupon-pilot-api-akcfigyefa-du.a.run.app
+        path_translation: APPEND_PATH_TO_ADDRESS
+      responses: {"200": {description: OK}}
+  /v1/recommendations:
+    post:
+      operationId: recommendations
+      security: [{firebase: []}]
+      x-google-backend:
+        address: https://coupon-pilot-api-akcfigyefa-du.a.run.app
+        jwt_audience: https://coupon-pilot-api-akcfigyefa-du.a.run.app
+        path_translation: APPEND_PATH_TO_ADDRESS
+      responses: {"200": {description: OK}}

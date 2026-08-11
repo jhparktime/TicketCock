@@ -1,0 +1,374 @@
+import Foundation
+import CoreLocation
+
+/// 데모에서 위치 기반 추천을 지원하는 카페·음료·외식 프랜차이즈입니다.
+enum SupportedFranchise: String, CaseIterable, Identifiable, Hashable {
+    case starbucks, twosome, mega, ediya, compose, paiks, hollys, coffeebean, gongcha, theventi
+    case baskinrobbins, parisbaguette, touslesjours, ashleyqueens
+
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .starbucks: "스타벅스"
+        case .twosome: "투썸플레이스"
+        case .mega: "메가MGC커피"
+        case .ediya: "이디야"
+        case .compose: "컴포즈커피"
+        case .paiks: "빽다방"
+        case .hollys: "할리스"
+        case .coffeebean: "커피빈"
+        case .gongcha: "공차"
+        case .theventi: "더벤티"
+        case .baskinrobbins: "베스킨라빈스"
+        case .parisbaguette: "파리바게뜨"
+        case .touslesjours: "뚜레쥬르"
+        case .ashleyqueens: "애슐리 퀸즈"
+        }
+    }
+
+    private var aliases: [String] {
+        switch self {
+        case .starbucks: ["스타벅스", "starbucks"]
+        case .twosome: ["투썸플레이스", "투썸", "twosomeplace", "twosome"]
+        case .mega: ["메가mgc커피", "메가커피", "megacoffee", "mgccoffee"]
+        case .ediya: ["이디야", "이디야커피", "ediya"]
+        case .compose: ["컴포즈커피", "컴포즈", "composecoffee"]
+        case .paiks: ["빽다방", "paikscoffee", "paikdabang"]
+        case .hollys: ["할리스", "할리스커피", "hollys"]
+        case .coffeebean: ["커피빈", "coffeebean"]
+        case .gongcha: ["공차", "gongcha"]
+        case .theventi: ["더벤티", "theventi"]
+        case .baskinrobbins: ["베스킨라빈스", "배스킨라빈스", "baskinrobbins", "baskin"]
+        case .parisbaguette: ["파리바게뜨", "파리바게트", "parisbaguette"]
+        case .touslesjours: ["뚜레쥬르", "touslesjours"]
+        case .ashleyqueens: ["애슐리퀸즈", "애슐리 퀸즈", "ashleyqueens", "ashley"]
+        }
+    }
+
+    func matches(_ value: String) -> Bool {
+        let candidate = Self.normalized(value)
+        guard !candidate.isEmpty else { return false }
+        return aliases.map(Self.normalized).contains { candidate.contains($0) || $0.contains(candidate) }
+    }
+
+    static func detected(in value: String) -> SupportedFranchise? {
+        allCases.first { $0.matches(value) }
+    }
+
+    private static func normalized(_ value: String) -> String {
+        value.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+    }
+}
+
+struct Store: Identifiable, Codable, Hashable {
+    let id: String
+    let name: String
+    let category: String
+    let latitude: Double
+    let longitude: Double
+    let radiusMeters: Double
+
+    var coordinate: CLLocationCoordinate2D { .init(latitude: latitude, longitude: longitude) }
+
+    /// 공공데이터 API 키 연결 전 위치 이벤트 검증에 사용하는 수원시 내 데모 매장입니다.
+    static let suwonDemoTwosome = Store(
+        id: "suwon-demo-twosome", name: "투썸플레이스 수원시청점 (데모)", category: "카페",
+        latitude: 37.2636, longitude: 127.0286, radiusMeters: 120
+    )
+}
+
+enum SuwonScope {
+    static let displayName = "수원시"
+    // Cloud Run도 같은 범위를 검사해 수원 외 매장을 앱에 반환하지 않습니다.
+    static let minimumLatitude = 37.18
+    static let maximumLatitude = 37.34
+    static let minimumLongitude = 126.90
+    static let maximumLongitude = 127.15
+}
+
+struct Coupon: Identifiable, Codable, Hashable {
+    let id: String
+    let brand: String
+    let title: String
+    let discountType: DiscountType
+    let discountValue: Int
+    let minimumOrderAmount: Int
+    let expiresAt: Date
+    let combinableWithCard: Bool
+    /// 특정 단품 쿠폰의 계산 기준가입니다. nil이면 사용자가 입력한 장바구니 금액을 사용합니다.
+    let referencePrice: Int?
+    let conditions: [String]
+    /// 원본 쿠폰 이미지는 앱 내부 저장소에만 보관합니다. 서버에 업로드하지 않습니다.
+    let localImageFilename: String?
+
+    init(
+        id: String,
+        brand: String,
+        title: String,
+        discountType: DiscountType,
+        discountValue: Int,
+        minimumOrderAmount: Int,
+        expiresAt: Date,
+        combinableWithCard: Bool,
+        referencePrice: Int? = nil,
+        conditions: [String],
+        localImageFilename: String?
+    ) {
+        self.id = id
+        self.brand = brand
+        self.title = title
+        self.discountType = discountType
+        self.discountValue = discountValue
+        self.minimumOrderAmount = minimumOrderAmount
+        self.expiresAt = expiresAt
+        self.combinableWithCard = combinableWithCard
+        self.referencePrice = referencePrice
+        self.conditions = conditions
+        self.localImageFilename = localImageFilename
+    }
+
+    enum DiscountType: String, Codable { case fixedAmount, percentage }
+
+    func matches(store: Store) -> Bool {
+        matches(storeName: store.name)
+    }
+
+    func matches(storeName: String) -> Bool {
+        let normalizedBrand = Self.normalized(brand)
+        let normalizedStore = Self.normalized(storeName)
+        guard normalizedBrand.count >= 2, !["기타", "전체", "all"].contains(normalizedBrand) else { return false }
+        if let franchise = SupportedFranchise.detected(in: brand) {
+            return franchise.matches(storeName)
+        }
+        if normalizedStore.contains(normalizedBrand) || normalizedBrand.contains(normalizedStore) { return true }
+        return false
+    }
+
+    var daysUntilExpiry: Int {
+        Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: .now), to: expiresAt).day ?? 0
+    }
+
+    private static func normalized(_ value: String) -> String {
+        value.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+    }
+
+    static let demoCoupons: [Coupon] = [
+        Coupon(id: "coupon-001", brand: "스타벅스", title: "음료 3,000원 할인", discountType: .fixedAmount, discountValue: 3000, minimumOrderAmount: 10000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 20), combinableWithCard: true, conditions: ["사이렌오더 제외", "타 쿠폰과 중복 불가"], localImageFilename: nil),
+        Coupon(id: "coupon-002", brand: "스타벅스", title: "제조 음료 20% 할인", discountType: .percentage, discountValue: 20, minimumOrderAmount: 0, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 6), combinableWithCard: false, conditions: ["최대 2,000원 할인"], localImageFilename: nil),
+        Coupon(id: "coupon-003", brand: "베스킨라빈스", title: "싱글레귤러 1+1", discountType: .fixedAmount, discountValue: 3900, minimumOrderAmount: 3900, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 14), combinableWithCard: false, conditions: ["동일 금액 또는 낮은 금액 상품 증정", "매장별 재고에 따라 사용 제한"], localImageFilename: nil),
+        Coupon(id: "coupon-004", brand: "파리바게뜨", title: "3,000원 할인", discountType: .fixedAmount, discountValue: 3000, minimumOrderAmount: 15000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 9), combinableWithCard: true, conditions: ["케이크·베이커리 포함", "타 행사와 중복 불가"], localImageFilename: nil),
+        Coupon(id: "coupon-005", brand: "뚜레쥬르", title: "베이커리 20% 할인", discountType: .percentage, discountValue: 20, minimumOrderAmount: 10000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 4), combinableWithCard: false, conditions: ["최대 4,000원 할인", "일부 케이크·상품 제외"], localImageFilename: nil),
+        Coupon(id: "coupon-006", brand: "애슐리 퀸즈", title: "평일 런치 5,000원 할인", discountType: .fixedAmount, discountValue: 5000, minimumOrderAmount: 20000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 18), combinableWithCard: false, conditions: ["평일 런치에 한함", "성인 1인 기준 · 타 할인 중복 불가"], localImageFilename: nil),
+        Coupon(id: "coupon-007", brand: "베스킨라빈스", title: "쿼터 4,000원 할인", discountType: .fixedAmount, discountValue: 4000, minimumOrderAmount: 18000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 7), combinableWithCard: true, conditions: ["쿼터 이상 구매", "프로모션 상품 제외"], localImageFilename: nil),
+        Coupon(id: "coupon-008", brand: "파리바게뜨", title: "음료 포함 20% 할인", discountType: .percentage, discountValue: 20, minimumOrderAmount: 12000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 16), combinableWithCard: false, conditions: ["최대 3,000원 할인", "해피오더 제외"], localImageFilename: nil),
+        Coupon(id: "coupon-009", brand: "뚜레쥬르", title: "케이크 4,000원 할인", discountType: .fixedAmount, discountValue: 4000, minimumOrderAmount: 25000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 11), combinableWithCard: true, conditions: ["예약 케이크 제외", "타 쿠폰과 중복 불가"], localImageFilename: nil),
+        Coupon(id: "coupon-010", brand: "애슐리 퀸즈", title: "평일 디너 10% 할인", discountType: .percentage, discountValue: 10, minimumOrderAmount: 30000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 5), combinableWithCard: false, conditions: ["최대 6,000원 할인", "주말·공휴일 제외"], localImageFilename: nil),
+        Coupon(id: "coupon-011", brand: "투썸플레이스", title: "아메리카노 2,000원 할인", discountType: .fixedAmount, discountValue: 2000, minimumOrderAmount: 5000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 13), combinableWithCard: true, referencePrice: 5100, conditions: ["아메리카노 기준가 5,100원", "제조 음료에 한함", "모바일 주문 가능"], localImageFilename: nil),
+        Coupon(id: "coupon-012", brand: "투썸플레이스", title: "조각 케이크 20% 할인", discountType: .percentage, discountValue: 20, minimumOrderAmount: 7000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 21), combinableWithCard: false, referencePrice: 7500, conditions: ["조각 케이크 기준가 7,500원", "최대 2,500원 할인", "홀케이크 제외"], localImageFilename: nil),
+        Coupon(id: "coupon-013", brand: "메가MGC커피", title: "음료 1,500원 할인", discountType: .fixedAmount, discountValue: 1500, minimumOrderAmount: 4000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 8), combinableWithCard: true, conditions: ["아이스 아메리카노 포함", "1회 1잔"], localImageFilename: nil),
+        Coupon(id: "coupon-014", brand: "이디야", title: "제조 음료 20% 할인", discountType: .percentage, discountValue: 20, minimumOrderAmount: 6000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 3), combinableWithCard: false, conditions: ["최대 2,000원 할인", "배달 주문 제외"], localImageFilename: nil),
+        Coupon(id: "coupon-015", brand: "컴포즈커피", title: "음료 1,000원 할인", discountType: .fixedAmount, discountValue: 1000, minimumOrderAmount: 3500, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 19), combinableWithCard: true, conditions: ["제조 음료에 한함", "타 이벤트와 중복 불가"], localImageFilename: nil),
+        Coupon(id: "coupon-016", brand: "빽다방", title: "아메리카노 1,500원 할인", discountType: .fixedAmount, discountValue: 1500, minimumOrderAmount: 3000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 10), combinableWithCard: true, conditions: ["핫·아이스 선택 가능", "1일 1회"], localImageFilename: nil),
+        Coupon(id: "coupon-017", brand: "할리스", title: "음료 30% 할인", discountType: .percentage, discountValue: 30, minimumOrderAmount: 7000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 6), combinableWithCard: false, conditions: ["최대 3,000원 할인", "MD·병음료 제외"], localImageFilename: nil),
+        Coupon(id: "coupon-018", brand: "커피빈", title: "제조 음료 2,000원 할인", discountType: .fixedAmount, discountValue: 2000, minimumOrderAmount: 6500, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 15), combinableWithCard: true, conditions: ["퍼플오더 제외", "1회 1잔"], localImageFilename: nil),
+        Coupon(id: "coupon-019", brand: "공차", title: "토핑 추가 무료", discountType: .fixedAmount, discountValue: 1000, minimumOrderAmount: 4500, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 12), combinableWithCard: false, conditions: ["펄·코코넛 토핑 중 1개", "음료 1잔당 1회"], localImageFilename: nil),
+        Coupon(id: "coupon-020", brand: "더벤티", title: "대용량 음료 1,500원 할인", discountType: .fixedAmount, discountValue: 1500, minimumOrderAmount: 4500, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 17), combinableWithCard: true, conditions: ["대용량 제조 음료", "키오스크 주문 가능"], localImageFilename: nil),
+        Coupon(id: "coupon-021", brand: "스타벅스", title: "사이즈업 무료", discountType: .fixedAmount, discountValue: 600, minimumOrderAmount: 4500, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 22), combinableWithCard: false, conditions: ["Tall 이상 제조 음료", "무료 음료 쿠폰과 중복 불가"], localImageFilename: nil),
+        Coupon(id: "coupon-022", brand: "파리바게뜨", title: "커피 1,000원 할인", discountType: .fixedAmount, discountValue: 1000, minimumOrderAmount: 3000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 2), combinableWithCard: true, conditions: ["PB 카페 음료", "1일 1회"], localImageFilename: nil)
+    ]
+}
+
+/// 이미지 OCR 결과를 사용자가 확인하기 전까지만 메모리에 두는 임시 데이터입니다.
+struct CouponDraft: Equatable {
+    var brand: String = ""
+    var title: String = ""
+    var discountType: Coupon.DiscountType = .fixedAmount
+    var discountValue: Int = 0
+    var minimumOrderAmount: Int = 0
+    var expiresAt: Date = .now.addingTimeInterval(60 * 60 * 24 * 30)
+    var combinableWithCard = false
+    var conditions: [String] = []
+    var requiresConfirmation = false
+
+    mutating func applyLLMNormalization(_ normalization: CouponNormalization) {
+        if let normalizedBrand = normalization.brand,
+           let franchise = SupportedFranchise.detected(in: normalizedBrand) {
+            brand = franchise.displayName
+        }
+        if let productName = normalization.productName?.trimmingCharacters(in: .whitespacesAndNewlines), !productName.isEmpty {
+            title = productName
+        }
+        switch normalization.discountType {
+        case "percentage": discountType = .percentage
+        case "fixedAmount": discountType = .fixedAmount
+        default: break
+        }
+        if let value = normalization.discountValue, value >= 0 { discountValue = value }
+        if let minimum = normalization.minimumOrderAmount, minimum >= 0 { minimumOrderAmount = minimum }
+        if let expiry = normalization.expiresAt,
+           let date = Self.yyyyMMdd.date(from: expiry) { expiresAt = date }
+        if !normalization.conditions.isEmpty { conditions = normalization.conditions }
+        requiresConfirmation = normalization.requiresConfirmation
+    }
+
+    func makeCoupon(id: String = UUID().uuidString, localImageFilename: String? = nil) -> Coupon {
+        Coupon(
+            id: id,
+            brand: brand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "기타" : brand,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "새 쿠폰" : title,
+            discountType: discountType,
+            discountValue: max(0, discountValue),
+            minimumOrderAmount: max(0, minimumOrderAmount),
+            expiresAt: expiresAt,
+            combinableWithCard: combinableWithCard,
+            conditions: conditions,
+            localImageFilename: localImageFilename
+        )
+    }
+
+    private static let yyyyMMdd: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+}
+
+/// 이미 사용한 쿠폰은 활성 쿠폰과 별도 컬렉션에 보관하며 추천 계산에서 제외합니다.
+struct UsedCoupon: Identifiable, Codable, Hashable {
+    let id: String
+    let brand: String
+    let productName: String
+    let expiresAt: Date
+    let orderNumber: String
+    let barcodeLast4: String
+    let usedAt: Date
+    let source: String
+    let imageResourceName: String?
+    let localImageFilename: String?
+
+    init(id: String, brand: String, productName: String, expiresAt: Date, orderNumber: String, barcodeLast4: String, usedAt: Date, source: String, imageResourceName: String? = nil, localImageFilename: String? = nil) {
+        self.id = id; self.brand = brand; self.productName = productName; self.expiresAt = expiresAt
+        self.orderNumber = orderNumber; self.barcodeLast4 = barcodeLast4; self.usedAt = usedAt; self.source = source
+        self.imageResourceName = imageResourceName; self.localImageFilename = localImageFilename
+    }
+
+    init(coupon: Coupon) {
+        self.init(id: coupon.id, brand: coupon.brand, productName: coupon.title, expiresAt: coupon.expiresAt,
+                  orderNumber: "앱에서 사용 처리", barcodeLast4: "-", usedAt: .now, source: "CouponPilot",
+                  localImageFilename: coupon.localImageFilename)
+    }
+
+    static let sampleHistory: [UsedCoupon] = [
+        UsedCoupon(
+            id: "used-starbucks-3336977781", brand: "스타벅스",
+            productName: "아이스 카페 아메리카노 T 2잔 + 부드러운 생크림 카스텔라",
+            expiresAt: date("2027-05-08"), orderNumber: "3336977781", barcodeLast4: "9847",
+            usedAt: date("2026-08-10"), source: "카카오톡 선물하기",
+            imageResourceName: "used-starbucks-3336977781"
+        ),
+        UsedCoupon(
+            id: "used-starbucks-3349217463", brand: "스타벅스",
+            productName: "아이스 카페 아메리카노 T 2잔",
+            expiresAt: date("2027-05-19"), orderNumber: "3349217463", barcodeLast4: "5892",
+            usedAt: date("2026-08-10"), source: "카카오톡 선물하기",
+            imageResourceName: "used-starbucks-3349217463"
+        )
+    ]
+
+    private static func date(_ value: String) -> Date {
+        DateFormatter.yyyyMMdd.date(from: value) ?? .now
+    }
+}
+
+private extension DateFormatter {
+    static let yyyyMMdd: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+}
+
+struct UserProfile: Codable, Equatable {
+    enum MonthlyBenefitStatus: String, Codable, CaseIterable, Identifiable {
+        case available
+        case used
+        case unknown
+
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .available: "이번 달 사용 가능"
+            case .used: "이번 달 사용함"
+            case .unknown: "확인 필요"
+            }
+        }
+    }
+
+    let id: String
+    /// SKT, KT, LG U+ 중 하나입니다. 카드 정보는 이 데모 범위에서 수집하지 않습니다.
+    let carrier: String
+    let membershipGrade: String
+    let monthlyBenefitStatus: MonthlyBenefitStatus
+
+    init(id: String, carrier: String, membershipGrade: String = "확인 필요", monthlyBenefitStatus: MonthlyBenefitStatus = .unknown) {
+        self.id = id
+        self.carrier = carrier
+        self.membershipGrade = membershipGrade
+        self.monthlyBenefitStatus = monthlyBenefitStatus
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, carrier, membershipGrade, monthlyBenefitStatus }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        carrier = try values.decode(String.self, forKey: .carrier)
+        membershipGrade = try values.decodeIfPresent(String.self, forKey: .membershipGrade) ?? "확인 필요"
+        monthlyBenefitStatus = try values.decodeIfPresent(MonthlyBenefitStatus.self, forKey: .monthlyBenefitStatus) ?? .unknown
+    }
+
+    static let demo = UserProfile(id: "demo-user", carrier: "LG U+", membershipGrade: "VIP", monthlyBenefitStatus: .available)
+}
+
+struct PriceOption: Identifiable, Codable, Hashable {
+    let id: String
+    let title: String
+    let originalPrice: Int?
+    let finalPrice: Int
+    let savings: Int
+    let badges: [String]
+}
+
+struct Recommendation: Codable, Hashable {
+    let storeName: String
+    let originalPrice: Int
+    let recommendedOption: PriceOption
+    let alternatives: [PriceOption]
+    let explanation: String
+    let benefitSources: [BenefitSource]
+
+    static func preview(for store: Store) -> Recommendation {
+        Recommendation(
+        storeName: store.name, originalPrice: 5_100,
+        recommendedOption: PriceOption(id: "best", title: "아메리카노 2,000원 할인", originalPrice: 5_100, finalPrice: 3_100, savings: 2_000, badges: ["단품 기준가", "쿠폰"]),
+        alternatives: [
+            PriceOption(id: "third", title: "조각 케이크 20% 할인", originalPrice: 7_500, finalPrice: 6_000, savings: 1_500, badges: ["단품 기준가", "쿠폰"])
+        ],
+        explanation: "계산기가 아메리카노 기준가 5,100원에서 쿠폰 2,000원을 차감해 최종 3,100원을 계산했어요. 통신사 혜택은 공식 앱에서 최종 적용 여부를 확인해 주세요.",
+        benefitSources: []
+    )
+    }
+
+    static let preview = preview(for: .suwonDemoTwosome)
+}
+
+struct BenefitSource: Codable, Hashable, Identifiable {
+    let title: String
+    let provider: String
+    let sourceURL: String
+    var id: String { "\(provider)-\(sourceURL)" }
+}

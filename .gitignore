@@ -1,0 +1,24 @@
+# macOS / Xcode user artifacts
+.DS_Store
+**/DerivedData/
+**/build/
+**/xcuserdata/
+**/*.xcuserstate
+
+# Secrets and environment-specific Firebase configuration
+**/GoogleService-Info.plist
+**/.env
+**/.env.*
+!**/.env.example
+**/*service-account*.json
+**/*credentials*.json
+**/*.pem
+**/*.p12
+
+# Dependencies and generated build output
+**/node_modules/
+**/dist/
+
+# Local workspace artifacts
+outputs/
+work/

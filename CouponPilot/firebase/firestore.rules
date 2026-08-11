@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// CouponPilot stores only confirmed coupon fields, membership profile values, and used-coupon
+// history. Original coupon images and OCR raw text stay on the device.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(userID) {
+      return request.auth != null && request.auth.uid == userID;
+    }
+
+    match /users/{userID} {
+      allow read, create, update, delete: if isOwner(userID);
+
+      match /coupons/{couponID} {
+        allow read, create, update, delete: if isOwner(userID);
+      }
+
+      match /usedCoupons/{couponID} {
+        allow read, create, update, delete: if isOwner(userID);
+      }
+    }
+  }
+}

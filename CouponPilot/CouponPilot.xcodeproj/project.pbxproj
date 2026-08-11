@@ -1,0 +1,376 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 71;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A00100000000000000000001 /* CouponPilotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000001 /* CouponPilotApp.swift */; };
+		A00100000000000000000002 /* DomainModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000002 /* DomainModels.swift */; };
+		A00100000000000000000003 /* LocationMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000003 /* LocationMonitor.swift */; };
+		A00100000000000000000004 /* CouponOCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000004 /* CouponOCRService.swift */; };
+		A00100000000000000000005 /* AgentAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000005 /* AgentAPIService.swift */; };
+		A00100000000000000000006 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000006 /* ContentView.swift */; };
+		A00100000000000000000007 /* RecommendationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000007 /* RecommendationSheet.swift */; };
+		A00100000000000000000008 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A01000000000000000000001 /* FirebaseCore */; };
+		A00100000000000000000009 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = A01000000000000000000002 /* FirebaseAuth */; };
+		A00100000000000000000010 /* CouponImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000009 /* CouponImportSheet.swift */; };
+		A00100000000000000000011 /* CouponImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000010 /* CouponImageStore.swift */; };
+		A00100000000000000000012 /* CouponDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000011 /* CouponDetailView.swift */; };
+		A00100000000000000000013 /* used-starbucks-3336977781.png in Resources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000012 /* used-starbucks-3336977781.png */; };
+		A00100000000000000000014 /* used-starbucks-3349217463.png in Resources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000013 /* used-starbucks-3349217463.png */; };
+		A00100000000000000000015 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = A01000000000000000000003 /* FirebaseFirestore */; };
+		A00100000000000000000016 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000014 /* NotificationManager.swift */; };
+		A00100000000000000000017 /* FirestoreRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000015 /* FirestoreRepository.swift */; };
+		A00100000000000000000018 /* Resources/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000016 /* Resources/Assets.xcassets */; };
+		A00100000000000000000019 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000017 /* GoogleService-Info.plist */; };
+		A00100000000000000000020 /* NearbyFranchiseFinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000018 /* NearbyFranchiseFinder.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A00200000000000000000001 /* CouponPilotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CouponPilotApp.swift; sourceTree = "<group>"; };
+		A00200000000000000000002 /* DomainModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainModels.swift; sourceTree = "<group>"; };
+		A00200000000000000000003 /* LocationMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationMonitor.swift; sourceTree = "<group>"; };
+		A00200000000000000000004 /* CouponOCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CouponOCRService.swift; sourceTree = "<group>"; };
+		A00200000000000000000005 /* AgentAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentAPIService.swift; sourceTree = "<group>"; };
+		A00200000000000000000006 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A00200000000000000000007 /* RecommendationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendationSheet.swift; sourceTree = "<group>"; };
+		A00200000000000000000008 /* CouponPilot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CouponPilot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00200000000000000000009 /* CouponImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CouponImportSheet.swift; sourceTree = "<group>"; };
+		A00200000000000000000010 /* CouponImageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CouponImageStore.swift; sourceTree = "<group>"; };
+		A00200000000000000000011 /* CouponDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CouponDetailView.swift; sourceTree = "<group>"; };
+		A00200000000000000000012 /* used-starbucks-3336977781.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "used-starbucks-3336977781.png"; sourceTree = "<group>"; };
+		A00200000000000000000013 /* used-starbucks-3349217463.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "used-starbucks-3349217463.png"; sourceTree = "<group>"; };
+		A00200000000000000000014 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		A00200000000000000000015 /* FirestoreRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreRepository.swift; sourceTree = "<group>"; };
+		A00200000000000000000016 /* Resources/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
+		A00200000000000000000017 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		A00200000000000000000018 /* NearbyFranchiseFinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyFranchiseFinder.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A00600000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00100000000000000000008 /* FirebaseCore in Frameworks */,
+				A00100000000000000000009 /* FirebaseAuth in Frameworks */,
+				A00100000000000000000015 /* FirebaseFirestore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A00300000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A00300000000000000000002 /* App */,
+				A00300000000000000000003 /* Models */,
+				A00300000000000000000004 /* Services */,
+				A00300000000000000000005 /* Views */,
+				A00300000000000000000007 /* Resources/UsedCoupons */,
+				A00200000000000000000016 /* Resources/Assets.xcassets */,
+				A00200000000000000000017 /* GoogleService-Info.plist */,
+				A00300000000000000000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A00300000000000000000002 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A00200000000000000000001 /* CouponPilotApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A00300000000000000000003 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A00200000000000000000002 /* DomainModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A00300000000000000000004 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A00200000000000000000003 /* LocationMonitor.swift */,
+				A00200000000000000000004 /* CouponOCRService.swift */,
+				A00200000000000000000005 /* AgentAPIService.swift */,
+				A00200000000000000000010 /* CouponImageStore.swift */,
+				A00200000000000000000014 /* NotificationManager.swift */,
+				A00200000000000000000015 /* FirestoreRepository.swift */,
+				A00200000000000000000018 /* NearbyFranchiseFinder.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A00300000000000000000005 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A00200000000000000000006 /* ContentView.swift */,
+				A00200000000000000000007 /* RecommendationSheet.swift */,
+				A00200000000000000000009 /* CouponImportSheet.swift */,
+				A00200000000000000000011 /* CouponDetailView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A00300000000000000000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A00200000000000000000008 /* CouponPilot.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A00300000000000000000007 /* Resources/UsedCoupons */ = {
+			isa = PBXGroup;
+			children = (
+				A00200000000000000000012 /* used-starbucks-3336977781.png */,
+				A00200000000000000000013 /* used-starbucks-3349217463.png */,
+			);
+			path = Resources/UsedCoupons;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00400000000000000000001 /* CouponPilot */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00500000000000000000002 /* Build configuration list for PBXNativeTarget "CouponPilot" */;
+			buildPhases = (
+				A00600000000000000000001 /* Sources */,
+				A00600000000000000000002 /* Frameworks */,
+				A00600000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CouponPilot;
+			packageProductDependencies = (
+				A01000000000000000000001 /* FirebaseCore */,
+				A01000000000000000000002 /* FirebaseAuth */,
+				A01000000000000000000003 /* FirebaseFirestore */,
+			);
+			productName = CouponPilot;
+			productReference = A00200000000000000000008 /* CouponPilot.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00700000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					A00400000000000000000001 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+				};
+			};
+			buildConfigurationList = A00500000000000000000001 /* Build configuration list for PBXProject "CouponPilot" */;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				ko,
+			);
+			mainGroup = A00300000000000000000001;
+			packageReferences = (
+				A00900000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
+			productRefGroup = A00300000000000000000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A00400000000000000000001 /* CouponPilot */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A00600000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00100000000000000000013 /* used-starbucks-3336977781.png in Resources */,
+				A00100000000000000000014 /* used-starbucks-3349217463.png in Resources */,
+				A00100000000000000000018 /* Resources/Assets.xcassets in Resources */,
+				A00100000000000000000019 /* GoogleService-Info.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A00600000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00100000000000000000001 /* CouponPilotApp.swift in Sources */,
+				A00100000000000000000002 /* DomainModels.swift in Sources */,
+				A00100000000000000000003 /* LocationMonitor.swift in Sources */,
+				A00100000000000000000004 /* CouponOCRService.swift in Sources */,
+				A00100000000000000000005 /* AgentAPIService.swift in Sources */,
+				A00100000000000000000011 /* CouponImageStore.swift in Sources */,
+				A00100000000000000000016 /* NotificationManager.swift in Sources */,
+				A00100000000000000000017 /* FirestoreRepository.swift in Sources */,
+				A00100000000000000000020 /* NearbyFranchiseFinder.swift in Sources */,
+				A00100000000000000000006 /* ContentView.swift in Sources */,
+				A00100000000000000000007 /* RecommendationSheet.swift in Sources */,
+				A00100000000000000000010 /* CouponImportSheet.swift in Sources */,
+				A00100000000000000000012 /* CouponDetailView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A00800000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A00800000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		A00800000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 5M7Y3K8P3C;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.couponpilot.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A00800000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 5M7Y3K8P3C;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.couponpilot.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A00500000000000000000001 /* Build configuration list for PBXProject "CouponPilot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00800000000000000000001 /* Debug */,
+				A00800000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00500000000000000000002 /* Build configuration list for PBXNativeTarget "CouponPilot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00800000000000000000003 /* Debug */,
+				A00800000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A00900000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A01000000000000000000001 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A00900000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		A01000000000000000000002 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A00900000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		A01000000000000000000003 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A00900000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A00700000000000000000001 /* Project object */;
+}
