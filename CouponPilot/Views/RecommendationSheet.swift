@@ -3,6 +3,7 @@ import SwiftUI
 struct RecommendationSheet: View {
     let recommendation: Recommendation
     let isDemo: Bool
+    var onOpenCoupon: (() -> Void)?
 
     private var accent: Color { isDemo ? .orange : .cyan }
 
@@ -14,6 +15,17 @@ struct RecommendationSheet: View {
                 VStack(alignment: .leading, spacing: 15) {
                     hero
                     bestOption
+                    if let onOpenCoupon {
+                        Button(action: onOpenCoupon) {
+                            Label("추천 쿠폰 열기", systemImage: "ticket.fill")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 15)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.teal)
+                        .accessibilityHint("쿠폰 이미지와 사용 조건을 확인합니다")
+                    }
                     aiExplanation
                     sourceSection
                     alternatives
@@ -98,12 +110,22 @@ struct RecommendationSheet: View {
 
     private var aiExplanation: some View {
         RecommendationGlassSurface(tint: .purple) {
-            Label("AI 추천 이유", systemImage: "sparkles")
+            Label("생성형 AI가 작성한 추천 설명", systemImage: "sparkles")
                 .font(.headline)
                 .foregroundStyle(.indigo)
             Text(recommendation.explanation)
                 .font(.subheadline)
                 .foregroundStyle(.primary.opacity(0.76))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Label("금액·절약액·순위는 규칙 기반 Calculator 결과이며 AI가 변경할 수 없어요.", systemImage: "checkmark.shield.fill")
+                .font(.caption)
+                .foregroundStyle(.teal)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Label("쿠폰콕은 결제를 실행하거나 승인하지 않아요. 실제 적용 여부와 결제 금액은 매장·카드사에서 최종 확인해 주세요.", systemImage: "creditcard.trianglebadge.exclamationmark")
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if isDemo {
@@ -131,6 +153,11 @@ struct RecommendationSheet: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(source.provider).font(.subheadline.weight(.bold))
                                 Text(source.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                if let checkedAt = source.checkedAt {
+                                    Text("공식 확인 \(checkedAt)\(source.version.map { " · v\($0)" } ?? "")")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             Spacer()
                             Image(systemName: "arrow.up.right")

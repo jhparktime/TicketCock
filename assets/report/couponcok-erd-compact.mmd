@@ -1,0 +1,23 @@
+flowchart TB
+    U["<b>UserProfile</b><br/>PK userId<br/>carrier<br/>membershipGrade<br/>monthlyBenefitUsed"]
+    C["<b>Coupon</b><br/>PK couponId · FK userId<br/>brand · title · barcodeValue<br/>discountType · discountValue<br/>expiresAt · status · ocrRawText"]
+    S["<b>Store</b><br/>PK storeId<br/>name · brand · address<br/>latitude · longitude<br/>businessStatus · source"]
+    R["<b>RecommendationLog</b><br/>PK recommendationId<br/>FK userId · storeId · couponId<br/>expectedPrice · calculatedSavings<br/>recommendedOption · createdAt"]
+    H["<b>CouponUsage</b><br/>PK usageId<br/>FK couponId · userId · storeId<br/>usedAt · finalPrice · savings"]
+    D["<b>BenefitDocument</b><br/>PK documentId<br/>provider · sourceURL<br/>collectedAt · updatedAt"]
+    B["<b>BenefitChunk</b><br/>PK chunkId · FK documentId<br/>text · embeddingRef<br/>brand · carrier"]
+
+    U -->|owns 1:N| C
+    C -->|candidate 1:N| R
+    S -->|triggers 1:N| R
+    C -->|usage_history 1:N| H
+    S -->|used_at 1:N| H
+    U -->|records 1:N| H
+    D -.->|split_into 1:N| B
+
+    N["원본 쿠폰 이미지는 iPhone 기기 내에만 보관<br/>Firestore: 사용자·쿠폰·매장·이력 / Cloud Storage: 공식 혜택 문서"]
+
+    classDef entity fill:#ffffff,stroke:#79a8ed,stroke-width:2px,color:#17365d,rx:12px,ry:12px;
+    classDef note fill:#f1f8ff,stroke:#7dd3fc,stroke-width:2px,color:#17365d,rx:12px,ry:12px;
+    class U,C,S,R,H,D,B entity;
+    class N note;

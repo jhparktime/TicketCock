@@ -1,4 +1,5 @@
 import Foundation
+import FirebaseAppCheck
 import FirebaseAuth
 import FirebaseCore
 
@@ -7,7 +8,42 @@ struct RecommendationRequest: Codable {
     let storeName: String
     let expectedPrice: Int
     let profile: UserProfile
-    let coupons: [Coupon]
+    let coupons: [RecommendationCouponPayload]
+
+    init(storeId: String, storeName: String, expectedPrice: Int, profile: UserProfile, coupons: [Coupon]) {
+        self.storeId = storeId
+        self.storeName = storeName
+        self.expectedPrice = expectedPrice
+        self.profile = profile
+        self.coupons = coupons.map(RecommendationCouponPayload.init)
+    }
+}
+
+/// Network allowlist: device-only image filenames and display-only conditions never leave iOS.
+struct RecommendationCouponPayload: Codable {
+    let id: String
+    let brand: String
+    let title: String
+    let discountType: Coupon.DiscountType
+    let discountValue: Int
+    let minimumOrderAmount: Int
+    let maximumDiscount: Int?
+    let expiresAt: Date
+    let combinableWithCard: Bool
+    let referencePrice: Int?
+
+    init(_ coupon: Coupon) {
+        id = coupon.id
+        brand = coupon.brand
+        title = coupon.title
+        discountType = coupon.discountType
+        discountValue = coupon.discountValue
+        minimumOrderAmount = coupon.minimumOrderAmount
+        maximumDiscount = coupon.maximumDiscount
+        expiresAt = coupon.expiresAt
+        combinableWithCard = coupon.combinableWithCard
+        referencePrice = coupon.referencePrice
+    }
 }
 
 /// Gemini가 기기 OCR 텍스트에서 보수적으로 추출한 쿠폰 초안입니다. 원본 이미지는 전송하지 않습니다.
@@ -33,6 +69,8 @@ struct AgentAPIService {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("Bearer \(try await user.getIDToken())", forHTTPHeaderField: "Authorization")
+        let appCheckToken = try await AppCheck.appCheck().token(forcingRefresh: false)
+        request.setValue(appCheckToken.token, forHTTPHeaderField: "X-Firebase-AppCheck")
         return request
     }
 
@@ -56,7 +94,9 @@ struct AgentAPIService {
 
         var request = try await authenticatedRequest(url: baseURL.appendingPathComponent("v1/recommendations"), method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(RecommendationRequest(storeId: store.id, storeName: store.name, expectedPrice: expectedPrice, profile: profile, coupons: coupons))
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        request.httpBody = try encoder.encode(RecommendationRequest(storeId: store.id, storeName: store.name, expectedPrice: expectedPrice, profile: profile, coupons: coupons))
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else { throw URLError(.badServerResponse) }

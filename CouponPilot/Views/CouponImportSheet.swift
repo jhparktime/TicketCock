@@ -52,13 +52,13 @@ struct CouponImportSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("저장") {
-                        if let previewImage {
+                        if let previewImage, draft.expiresAt >= Calendar.current.startOfDay(for: .now) {
                             appState.saveImportedCoupon(draft: draft, image: previewImage)
                             dismiss()
                         }
                     }
                     .fontWeight(.bold)
-                    .disabled(previewImage == nil || isRecognizing || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(previewImage == nil || isRecognizing || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.expiresAt < Calendar.current.startOfDay(for: .now))
                 }
             }
         }
@@ -72,20 +72,21 @@ struct CouponImportSheet: View {
         VStack(alignment: .leading, spacing: 7) {
             Text("사진에서 쿠폰을 읽어요")
                 .font(.title2.weight(.bold))
-            Text("원본 이미지는 서버로 전송되지 않고 이 기기에만 보관됩니다. 읽힌 텍스트만 AI 정리에 사용하며 저장하지 않습니다.")
+            Text("원본 이미지는 서버로 전송되지 않고 이 기기에만 보관됩니다. 바코드·연락처를 기기에서 제거한 OCR 텍스트만 AI 정리를 위해 인증된 서버로 전송하며, 서버에는 원문을 저장하지 않습니다.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
     }
 
     private var imagePicker: some View {
-        PhotosPicker(selection: $selectedItem, matching: .images) {
+        let displayedImage = previewImage
+        return PhotosPicker(selection: $selectedItem, matching: .images) {
             ZStack {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(.blue.opacity(0.11))
                     .overlay { RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.blue.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [7])) }
-                if let previewImage {
-                    Image(uiImage: previewImage)
+                if let displayedImage {
+                    Image(uiImage: displayedImage)
                         .resizable()
                         .scaledToFill()
                         .frame(height: 208)
@@ -127,7 +128,7 @@ struct CouponImportSheet: View {
                     Text(franchise.displayName).tag(franchise.displayName)
                 }
             }
-            Text("위치 추천은 지원 프랜차이즈 10곳의 쿠폰만 가능해요.")
+            Text("위치 추천은 지원 프랜차이즈 14곳의 쿠폰만 가능해요.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if usedAINormalization {
@@ -156,7 +157,26 @@ struct CouponImportSheet: View {
                     .foregroundStyle(.secondary)
             }
 
-            DatePicker("유효기간", selection: $draft.expiresAt, displayedComponents: .date)
+            DatePicker(
+                "유효기간",
+                selection: $draft.expiresAt,
+                in: Calendar.current.startOfDay(for: .now)...,
+                displayedComponents: .date
+            )
+            if draft.discountType == .percentage {
+                HStack {
+                    Text("최대 할인액")
+                    Spacer()
+                    TextField("없음", value: $draft.maximumDiscount, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 86)
+                    Text("원").foregroundStyle(.secondary)
+                }
+                Text("쿠폰에 최대 할인액이 적혀 있다면 입력해 주세요. 없으면 비워둘 수 있어요.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             TextField("사용 조건 (쉼표로 구분)", text: conditionsText)
                 .textFieldStyle(.roundedBorder)
             Toggle("카드 혜택과 중복 가능", isOn: $draft.combinableWithCard)
@@ -206,8 +226,10 @@ struct CouponImportSheet: View {
             rawText = try await CouponOCRService().recognizeRawText(in: image)
             draft = CouponOCRParser.makeDraft(from: rawText)
             usedAINormalization = false
+            let redactedRemoteText = CouponOCRParser.redactedForRemoteNormalization(rawText)
             if await appState.ensureFirebaseAuthentication(),
-               let normalization = try? await AgentAPIService().normalizeCoupon(rawText: rawText) {
+               !redactedRemoteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let normalization = try? await AgentAPIService().normalizeCoupon(rawText: redactedRemoteText) {
                 draft.applyLLMNormalization(normalization)
                 usedAINormalization = true
             }

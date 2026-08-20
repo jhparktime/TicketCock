@@ -1,0 +1,110 @@
+{
+  "eval_set_id": "couponcok_mvp_v1",
+  "name": "쿠폰콕 MVP 핵심 추천",
+  "description": "도구 호출과 결정론적 금액 계약을 검증하는 ADK 평가셋",
+  "eval_cases": [
+    {
+      "eval_id": "twosome_fixed_discount",
+      "conversation": [
+        {
+          "invocation_id": "twosome-turn-1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "{\"storeId\":\"twosome-suwon\",\"storeName\":\"투썸플레이스 수원점\",\"expectedPrice\":5100,\"profile\":{\"carrier\":\"SKT\",\"membershipGrade\":\"VIP\",\"monthlyBenefitStatus\":\"available\"},\"coupons\":[{\"id\":\"twosome-americano\",\"brand\":\"투썸플레이스\",\"title\":\"아메리카노 2,000원 할인\",\"discountType\":\"fixedAmount\",\"discountValue\":2000,\"minimumOrderAmount\":0,\"combinableWithCard\":false,\"referencePrice\":5100}]}"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "{\"recommendedOption\":{\"id\":\"twosome-americano\",\"originalPrice\":5100,\"finalPrice\":3100,\"savings\":2000},\"explanation\":\"계산기 기준으로 2,000원을 절약해 최종가는 3,100원입니다.\"}"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "retrieve_carrier_benefits",
+                "args": {
+                  "carrier": "SKT",
+                  "membershipGrade": "VIP",
+                  "storeName": "투썸플레이스 수원점"
+                }
+              },
+              {
+                "name": "calculate_best_discount",
+                "args": {
+                  "storeId": "twosome-suwon",
+                  "storeName": "투썸플레이스 수원점",
+                  "expectedPrice": 5100
+                }
+              }
+            ],
+            "tool_responses": [],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "couponcok_agent",
+        "user_id": "eval-user",
+        "state": {}
+      },
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "starbucks_best_coupon",
+      "conversation": [
+        {
+          "invocation_id": "starbucks-turn-1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "{\"storeId\":\"starbucks-suwon\",\"storeName\":\"스타벅스 수원시청점\",\"expectedPrice\":15000,\"profile\":{\"carrier\":\"KT\",\"monthlyBenefitStatus\":\"unknown\"},\"coupons\":[{\"id\":\"fixed-3000\",\"brand\":\"스타벅스\",\"title\":\"3,000원 할인\",\"discountType\":\"fixedAmount\",\"discountValue\":3000,\"minimumOrderAmount\":10000,\"combinableWithCard\":false},{\"id\":\"percent-20\",\"brand\":\"스타벅스\",\"title\":\"20% 할인\",\"discountType\":\"percentage\",\"discountValue\":20,\"minimumOrderAmount\":0,\"combinableWithCard\":false}]}"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "{\"recommendedOption\":{\"id\":\"fixed-3000\",\"originalPrice\":15000,\"finalPrice\":12000,\"savings\":3000},\"explanation\":\"계산기 기준으로 3,000원 정액 쿠폰이 가장 유리합니다.\"}"
+              }
+            ]
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "retrieve_carrier_benefits",
+                "args": {
+                  "carrier": "KT",
+                  "storeName": "스타벅스 수원시청점"
+                }
+              },
+              {
+                "name": "calculate_best_discount",
+                "args": {
+                  "storeId": "starbucks-suwon",
+                  "storeName": "스타벅스 수원시청점",
+                  "expectedPrice": 15000
+                }
+              }
+            ],
+            "tool_responses": [],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "couponcok_agent",
+        "user_id": "eval-user",
+        "state": {}
+      },
+      "final_session_state": {}
+    }
+  ]
+}

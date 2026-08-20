@@ -88,7 +88,10 @@ struct CouponDetailView: View {
 }
 
 struct UsedCouponDetailView: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.dismiss) private var dismiss
     let coupon: UsedCoupon
+    @State private var showRestoreConfirmation = false
 
     var body: some View {
         ScrollView {
@@ -127,11 +130,34 @@ struct UsedCouponDetailView: View {
                 }
                 .padding(.horizontal, 16)
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                if coupon.originalCoupon != nil {
+                    Button { showRestoreConfirmation = true } label: {
+                        Label("사용 가능한 쿠폰으로 복원", systemImage: "arrow.uturn.backward.circle.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.cyan)
+                } else {
+                    Label("이전 버전에서 저장한 기록은 원본 할인 조건이 없어 복원할 수 없어요", systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(20)
         }
         .navigationTitle("사용 완료 쿠폰")
         .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog("이 쿠폰을 다시 사용 가능으로 복원할까요?", isPresented: $showRestoreConfirmation, titleVisibility: .visible) {
+            Button("쿠폰 복원") {
+                if appState.restoreUsedCoupon(coupon) { dismiss() }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("할인 금액, 사용 조건, 만료일과 기기 내 이미지가 원래 상태로 복원됩니다.")
+        }
     }
 
     private func detailRow(_ title: String, value: String) -> some View {

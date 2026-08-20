@@ -1,0 +1,20 @@
+[project]
+name = "couponcok-adk-agent"
+version = "0.1.0"
+description = "CouponCock multi-agent recommendation orchestrator built with Google ADK"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "agentops>=0.4.21,<1.0.0",
+  "google-adk[gcp,mcp]>=2.0.0,<3.0.0",
+  "python-dotenv>=1.0.1,<2.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["couponcok_agent*"]

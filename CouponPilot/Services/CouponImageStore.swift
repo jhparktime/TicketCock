@@ -30,6 +30,13 @@ final class CouponImageStore {
         guard let filename else { return nil }
         return UIImage(contentsOfFile: directoryURL.appendingPathComponent(filename).path)
     }
+
+    func deleteAll() throws {
+        let files = try FileManager.default.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil)
+        for file in files {
+            try FileManager.default.removeItem(at: file)
+        }
+    }
 }
 
 enum CouponImageStoreError: Error { case encodingFailed }

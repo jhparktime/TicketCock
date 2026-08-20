@@ -3,6 +3,9 @@ import UserNotifications
 @MainActor
 final class NotificationManager: NSObject, ObservableObject {
     @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
+    /// The store selected from a system notification. ContentView consumes this value and
+    /// restores the already calculated recommendation instead of leaving the user at Home.
+    @Published private(set) var pendingStoreID: String?
 
     override init() {
         super.init()
@@ -19,7 +22,7 @@ final class NotificationManager: NSObject, ObservableObject {
         refreshAuthorizationStatus()
     }
 
-    func notifyStoreEntry(_ store: Store, couponCount: Int, savings: Int) async {
+    func notifyStoreEntry(_ store: Store, couponCount: Int, savings: Int? = nil) async {
         // The location callback can arrive immediately after the user approves the alert.
         // Read the system setting here instead of relying on a previously published value.
         let status = await currentAuthorizationStatus()
@@ -28,7 +31,11 @@ final class NotificationManager: NSObject, ObservableObject {
         let content = UNMutableNotificationContent()
         content.title = "\(store.name)에 도착했어요"
         content.subtitle = "쿠폰콕 · 위치 기반 쿠폰 알림"
-        content.body = "쿠폰 \(couponCount)장을 비교했어요 · 최대 \(savings.formatted())원 절약"
+        if let savings {
+            content.body = "쿠폰 \(couponCount)장을 비교했어요 · 최대 \(savings.formatted())원 절약"
+        } else {
+            content.body = "사용 가능한 쿠폰 \(couponCount)장을 찾았어요 · 앱에서 최적 혜택을 확인하세요"
+        }
         content.sound = .default
         content.userInfo = ["storeID": store.id]
         let request = UNNotificationRequest(identifier: "store-entry-\(store.id)", content: content, trigger: nil)
@@ -58,5 +65,23 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound])
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let storeID = response.notification.request.content.userInfo["storeID"] as? String
+        Task { @MainActor [weak self] in
+            self?.pendingStoreID = storeID
+        }
+        completionHandler()
+    }
+
+    @MainActor
+    func consumePendingStoreID() -> String? {
+        defer { pendingStoreID = nil }
+        return pendingStoreID
     }
 }

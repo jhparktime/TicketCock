@@ -1,6 +1,8 @@
 import SwiftUI
 import UIKit
 import CoreLocation
+import PhotosUI
+import AuthenticationServices
 
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
@@ -10,9 +12,12 @@ struct ContentView: View {
     @State private var expectedPrice = "15000"
     @State private var selectedTab = "home"
     @State private var showCouponImporter = false
-    @State private var selectedCarrier = UserProfile.demo.carrier
-    @State private var selectedMembershipGrade = UserProfile.demo.membershipGrade
-    @State private var selectedMonthlyBenefitStatus = UserProfile.demo.monthlyBenefitStatus
+    @State private var selectedCarrier = UserProfile.empty.carrier
+    @State private var selectedMembershipGrade = UserProfile.empty.membershipGrade
+    @State private var selectedMonthlyBenefitStatus = UserProfile.empty.monthlyBenefitStatus
+    @State private var selectedCardID = ""
+    @State private var cardPreviousSpendQualified = false
+    @State private var cardMonthlyBenefitRemaining = "0"
     @State private var showRecommendationError = false
     @State private var recommendationErrorTitle = "추천을 불러오지 못했어요"
     @State private var recommendationErrorMessage = "공공데이터 또는 인증된 API에 연결하지 못했습니다. 데모 결과는 실제 API 응답이 아니라는 표시와 함께 제공합니다."
@@ -20,8 +25,27 @@ struct ContentView: View {
     @State private var lastStoreDirectoryCoordinate: CLLocationCoordinate2D?
     @State private var lastStoreDirectoryRefreshAt = Date.distantPast
     @State private var isRefreshingStoreDirectory = false
+    @State private var selectedRecommendationCoupon: Coupon?
+    @State private var showDeletePersonalDataConfirmation = false
+    @State private var personalDataDeletionMessage: String?
+    @State private var showCardImporter = false
+    @State private var appleSignInNonce = ""
+    @State private var accountLoginMessage: String?
 
     var body: some View {
+        if appState.privacyConsent.permitsService {
+            mainContent
+        } else {
+            PrivacyConsentView { personalization, locationPersonalization in
+                appState.acceptPrivacyConsent(
+                    personalization: personalization,
+                    locationPersonalization: locationPersonalization
+                )
+            }
+        }
+    }
+
+    private var mainContent: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
                 homeScreen
@@ -50,6 +74,34 @@ struct ContentView: View {
         .tint(.cyan)
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .overlay(alignment: .bottom) {
+            if let coupon = appState.recentlyUsedCoupon {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.mint)
+                    Text("\(coupon.title) 사용 완료")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Button("실행 취소") {
+                        appState.undoRecentCouponUse()
+                    }
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.cyan)
+                }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 54)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay { Capsule().stroke(.white.opacity(0.55), lineWidth: 1) }
+                .shadow(color: .black.opacity(0.15), radius: 18, y: 8)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 66)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("실행 취소를 누르면 사용 가능한 쿠폰으로 복원합니다")
+            }
+        }
+        .animation(.snappy, value: appState.recentlyUsedCoupon?.id)
         .onAppear {
             locationMonitor.onStoreEntry = { store in
                 Task { await handleStoreEntry(store) }
@@ -57,11 +109,34 @@ struct ContentView: View {
             locationMonitor.onLocationUpdate = { coordinate in
                 Task { await refreshNearbyStores(at: coordinate) }
             }
-            locationMonitor.resumeMonitoringIfEnabled()
+            if appState.privacyConsent.locationPersonalizationAccepted {
+                locationMonitor.resumeMonitoringIfEnabled()
+            } else {
+                locationMonitor.stopMonitoring()
+            }
+            handleNotificationTapIfNeeded()
+        }
+        .onChange(of: appState.privacyConsent.locationPersonalizationAccepted) { _, isAccepted in
+            if isAccepted {
+                locationMonitor.requestPermissionsAndMonitor(appState.nearbyStores)
+                locationMonitor.requestCurrentLocation()
+            } else {
+                locationMonitor.stopMonitoring()
+            }
+        }
+        .onChange(of: notificationManager.pendingStoreID) { _, _ in
+            handleNotificationTapIfNeeded()
         }
         .sheet(isPresented: $appState.shouldShowRecommendation) {
             if let recommendation = appState.recommendation {
-                RecommendationSheet(recommendation: recommendation, isDemo: appState.recommendationOrigin == .demo)
+                RecommendationSheet(
+                    recommendation: recommendation,
+                    isDemo: appState.recommendationOrigin == .demo,
+                    onOpenCoupon: appState.coupons.contains(where: { $0.id == recommendation.recommendedOption.id }) ? {
+                        appState.shouldShowRecommendation = false
+                        selectedRecommendationCoupon = appState.coupons.first { $0.id == recommendation.recommendedOption.id }
+                    } : nil
+                )
                     .presentationDetents([.large])
                     .presentationCornerRadius(34)
                     .presentationBackground(.ultraThinMaterial)
@@ -70,6 +145,18 @@ struct ContentView: View {
         .sheet(isPresented: $showCouponImporter) {
             CouponImportSheet()
                 .environmentObject(appState)
+        }
+        .sheet(isPresented: $showCardImporter) {
+            CardImportSheet { card in
+                selectedCardID = card.productId
+                cardPreviousSpendQualified = false
+                cardMonthlyBenefitRemaining = "0"
+            }
+        }
+        .sheet(item: $selectedRecommendationCoupon) { coupon in
+            NavigationStack {
+                CouponDetailView(coupon: coupon)
+            }
         }
         .alert(recommendationErrorTitle, isPresented: $showRecommendationError) {
             Button("다시 시도") {
@@ -116,22 +203,53 @@ struct ContentView: View {
     private var topBar: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("안녕하세요, 재현님")
+                Text(syncStatusTitle)
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(AppPalette.ink.opacity(0.62))
+                    .foregroundStyle(appState.cloudSyncState == .needsRetry ? Color.orange : AppPalette.ink.opacity(0.62))
                 Text("오늘의 혜택")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(AppPalette.ink)
             }
             Spacer()
-            ZStack {
-                Circle().fill(.white.opacity(0.15))
-                Image(systemName: "bell.badge.fill")
-                    .font(.title3)
-                    .foregroundStyle(AppPalette.ink)
+            Button {
+                if appState.cloudSyncState == .needsRetry {
+                    appState.retryCloudSync()
+                }
+            } label: {
+                ZStack {
+                    Circle().fill(.white.opacity(0.15))
+                    if appState.cloudSyncState == .syncing {
+                        ProgressView().tint(AppPalette.ink)
+                    } else {
+                        Image(systemName: syncStatusIcon)
+                            .font(.title3)
+                            .foregroundStyle(appState.cloudSyncState == .needsRetry ? Color.orange : AppPalette.ink)
+                    }
+                }
+                .frame(width: 48, height: 48)
+                .overlay { Circle().stroke(AppPalette.ink.opacity(0.12), lineWidth: 1) }
             }
-            .frame(width: 48, height: 48)
-            .overlay { Circle().stroke(AppPalette.ink.opacity(0.12), lineWidth: 1) }
+            .buttonStyle(.plain)
+            .accessibilityLabel(syncStatusTitle)
+            .accessibilityHint(appState.cloudSyncState == .needsRetry ? "탭하여 클라우드 동기화를 다시 시도합니다" : "쿠폰 동기화 상태입니다")
+        }
+    }
+
+    private var syncStatusTitle: String {
+        switch appState.cloudSyncState {
+        case .localOnly: "이 기기에 안전하게 저장 중"
+        case .syncing: "쿠폰을 안전하게 동기화 중"
+        case .synced: "쿠폰 동기화 완료"
+        case .needsRetry: "동기화 대기 · 탭하여 재시도"
+        }
+    }
+
+    private var syncStatusIcon: String {
+        switch appState.cloudSyncState {
+        case .localOnly: "iphone"
+        case .syncing: "arrow.triangle.2.circlepath"
+        case .synced: "checkmark.icloud.fill"
+        case .needsRetry: "icloud.slash.fill"
         }
     }
 
@@ -149,10 +267,19 @@ struct ContentView: View {
                     .foregroundStyle(AppPalette.ink.opacity(0.58))
             }
             Spacer()
-            Toggle("매장 진입 알림", isOn: locationMonitoringBinding)
-                .labelsHidden()
-                .tint(.mint)
-                .accessibilityHint("켜면 수원 매장 진입을 감지해 쿠폰을 추천합니다")
+            if locationMonitor.monitoringState == .needsAlwaysAuthorization {
+                Button("백그라운드 설정") {
+                    Task { await notificationManager.requestAuthorization() }
+                    locationMonitor.requestBackgroundAuthorization()
+                }
+                .font(.caption.weight(.bold))
+                .buttonStyle(.bordered)
+            } else {
+                Toggle("매장 진입 알림", isOn: locationMonitoringBinding)
+                    .labelsHidden()
+                    .tint(.mint)
+                    .accessibilityHint("켜면 수원 매장 진입을 감지해 쿠폰을 추천합니다")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -164,13 +291,14 @@ struct ContentView: View {
     private var locationMonitoringBinding: Binding<Bool> {
         Binding(
             get: {
-                locationMonitor.monitoringState == .active ||
-                locationMonitor.monitoringState == .requestingPermission ||
-                locationMonitor.monitoringState == .needsAlwaysAuthorization
+                locationMonitor.monitoringState == .active || locationMonitor.monitoringState == .requestingPermission
             },
             set: { enabled in
                 if enabled {
-                    Task { await notificationManager.requestAuthorization() }
+                    guard appState.privacyConsent.locationPersonalizationAccepted else {
+                        selectedTab = "profile"
+                        return
+                    }
                     locationMonitor.requestPermissionsAndMonitor(appState.nearbyStores)
                 } else {
                     locationMonitor.stopMonitoring()
@@ -183,6 +311,8 @@ struct ContentView: View {
         switch locationMonitor.monitoringState {
         case .denied: "위치 권한이 필요해요"
         case .needsAlwaysAuthorization: "백그라운드 알림은 ‘항상 허용’이 필요해요"
+        case .active where locationMonitor.isAtRegionLimit:
+            "가까운 \(locationMonitor.availableStoreCount)곳 중 \(locationMonitor.monitoredStoreCount)곳 감지 중"
         default: appState.storeDirectoryState.message
         }
     }
@@ -242,6 +372,12 @@ struct ContentView: View {
                 }
                 .buttonStyle(PrimaryGlassButtonStyle())
                 .disabled(appState.isLoadingRecommendation || matchingCoupons.isEmpty)
+
+                Label("생성형 AI가 쿠폰 문구와 추천 이유를 설명해요. 금액·순위는 규칙 기반 Calculator가 확정합니다.", systemImage: "info.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.78))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("인공지능 사용 안내. 생성형 인공지능은 쿠폰 문구와 추천 이유를 설명하며, 금액과 순위는 규칙 기반 계산기가 확정합니다.")
             } else {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 7) {
@@ -267,12 +403,23 @@ struct ContentView: View {
                         .overlay { Circle().stroke(.white.opacity(0.28), lineWidth: 1) }
                 }
 
-                Button {
-                    Task { await notificationManager.requestAuthorization() }
+            Button {
+                if appState.privacyConsent.locationPersonalizationAccepted {
                     locationMonitor.requestPermissionsAndMonitor(appState.nearbyStores)
                     locationMonitor.requestCurrentLocation()
-                } label: {
-                    Label(appState.storeDirectoryState == .unavailable ? "매장 목록 다시 불러오기" : "현재 위치 확인하기", systemImage: "location.fill")
+                } else {
+                    appState.updateOptionalConsents(
+                        personalization: appState.privacyConsent.personalizationAccepted,
+                        locationPersonalization: true
+                    )
+                }
+            } label: {
+                    Label(
+                        appState.privacyConsent.locationPersonalizationAccepted
+                            ? (appState.storeDirectoryState == .unavailable ? "매장 목록 다시 불러오기" : "현재 위치 확인하기")
+                            : "위치 개인화 동의하고 시작",
+                        systemImage: "location.fill"
+                    )
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -280,17 +427,28 @@ struct ContentView: View {
                 .buttonStyle(PrimaryGlassButtonStyle())
             }
 
-            Button {
-                Task { await handleDemoStoreEntry() }
-            } label: {
-                Label("데모: 투썸플레이스 매장 진입 테스트", systemImage: "location.fill.viewfinder")
-                    .font(.caption.weight(.bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
+            if locationMonitor.monitoringState == .denied {
+                Button("설정에서 위치 권한 열기") {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                }
+                .buttonStyle(.bordered)
+                .tint(.white)
             }
-            .buttonStyle(.bordered)
-            .tint(.white.opacity(0.75))
-            .accessibilityHint("GPS 이동 없이 매장 진입 알림과 추천을 테스트합니다")
+
+            if AppState.includesDemoFixtures {
+                Button {
+                    Task { await handleDemoStoreEntry() }
+                } label: {
+                    Label("데모: 투썸플레이스 매장 진입 테스트", systemImage: "location.fill.viewfinder")
+                        .font(.caption.weight(.bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                }
+                .buttonStyle(.bordered)
+                .tint(.white.opacity(0.75))
+                .accessibilityHint("GPS 이동 없이 매장 진입 알림과 추천을 테스트합니다")
+            }
         }
         .padding(21)
         .background(
@@ -325,19 +483,46 @@ struct ContentView: View {
                 .frame(minWidth: 44, minHeight: 44)
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(appState.coupons) { coupon in
-                        NavigationLink {
-                            CouponDetailView(coupon: coupon)
-                        } label: {
-                            couponCard(coupon)
+            if appState.coupons.isEmpty {
+                Button {
+                    showCouponImporter = true
+                } label: {
+                    HStack(spacing: 13) {
+                        Image(systemName: "ticket.badge.plus")
+                            .font(.title2)
+                            .foregroundStyle(.cyan)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("첫 쿠폰을 등록해 보세요")
+                                .font(.subheadline.weight(.bold))
+                            Text("사진을 고르면 기기 내 OCR로 쿠폰 정보를 읽어요")
+                                .font(.caption)
+                                .foregroundStyle(AppPalette.ink.opacity(0.55))
                         }
-                        .buttonStyle(.plain)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(AppPalette.ink.opacity(0.42))
+                    }
+                    .padding(17)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(appState.coupons) { coupon in
+                            NavigationLink {
+                                CouponDetailView(coupon: coupon)
+                            } label: {
+                                couponCard(coupon)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
+                .padding(.horizontal, 1)
             }
-            .padding(.horizontal, 1)
         }
     }
 
@@ -430,6 +615,9 @@ struct ContentView: View {
     }
 
     private var usedCouponSection: some View {
+        Button {
+            selectedTab = "history"
+        } label: {
         HStack(spacing: 13) {
             Image(systemName: "checkmark.seal.fill")
                 .font(.title2)
@@ -448,6 +636,9 @@ struct ContentView: View {
         }
         .padding(17)
         .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("사용 완료 쿠폰 기록을 엽니다")
     }
 
     private var couponLibrary: some View {
@@ -522,6 +713,54 @@ struct ContentView: View {
 
     private var profileScreen: some View {
         Form {
+            Section("계정") {
+                Label(appState.accountStatus.title, systemImage: appState.accountStatus == .apple ? "checkmark.icloud.fill" : "person.crop.circle.badge.clock")
+                    .foregroundStyle(appState.accountStatus == .apple ? .mint : .primary)
+                Text(appState.accountStatus.detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                if appState.accountStatus == .guest {
+                    SignInWithAppleButton(.continue) { request in
+                        let nonce = AppleSignInNonce.make()
+                        appleSignInNonce = nonce
+                        request.requestedScopes = [.email]
+                        request.nonce = AppleSignInNonce.sha256(nonce)
+                    } onCompletion: { result in
+                        handleAppleSignIn(result)
+                    }
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(height: 48)
+
+                    Text("로그인하면 이 기기의 쿠폰·프로필을 Apple 계정에 연결합니다. 카드번호·결제내역·위치 이력은 계정에 저장하지 않습니다.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Section("초개인화와 위치 동의") {
+                Toggle("쿠폰·멤버십 초개인화", isOn: Binding(
+                    get: { appState.privacyConsent.personalizationAccepted },
+                    set: { accepted in
+                        appState.updateOptionalConsents(
+                            personalization: accepted,
+                            locationPersonalization: appState.privacyConsent.locationPersonalizationAccepted
+                        )
+                    }
+                ))
+                Toggle("매장 진입 위치 개인화", isOn: Binding(
+                    get: { appState.privacyConsent.locationPersonalizationAccepted },
+                    set: { accepted in
+                        appState.updateOptionalConsents(
+                            personalization: appState.privacyConsent.personalizationAccepted,
+                            locationPersonalization: accepted
+                        )
+                        if !accepted { locationMonitor.stopMonitoring() }
+                    }
+                ))
+                Text("선택 동의이며 언제든 철회할 수 있어요. 위치 이력은 서버에 저장하지 않고, 카드번호·CVC·거래내역은 수집하지 않습니다.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             Section("통신사 멤버십") {
                 Picker("통신사", selection: $selectedCarrier) {
                     ForEach(["SKT", "KT", "LG U+", "없음"], id: \.self) { Text($0).tag($0) }
@@ -534,18 +773,67 @@ struct ContentView: View {
                         Text(status.title).tag(status)
                     }
                 }
-                Button("멤버십 정보 저장") {
+            }
+            .disabled(!appState.privacyConsent.personalizationAccepted)
+            Section("보유 카드 혜택 (선택)") {
+                Button {
+                    showCardImporter = true
+                } label: {
+                    Label("카드 사진으로 상품 찾기", systemImage: "viewfinder")
+                }
+                Picker("카드 상품", selection: $selectedCardID) {
+                    Text("선택 안 함").tag("")
+                    ForEach(PaymentCard.catalog) { card in
+                        Text(card.productName).tag(card.productId)
+                    }
+                }
+                if let card = selectedCatalogCard {
+                    Toggle("전월 실적 충족", isOn: $cardPreviousSpendQualified)
+                    TextField("이번 달 남은 할인 한도", text: $cardMonthlyBenefitRemaining)
+                        .keyboardType(.numberPad)
+                    Label("카드번호·유효기간·CVC·결제내역은 저장하지 않아요", systemImage: "lock.shield.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    if card.productId == "shinhancard-mr-life" {
+                        Text("오후 9시~오전 9시 식음료 10% · 1회 최대 1,000원. 쿠폰 중복은 제안하지 않아요.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("현재는 공식 문서와 조건을 보여줘요. 결제수단·포인트 조건이 확정된 경우에만 가격 계산에 반영됩니다.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .disabled(!appState.privacyConsent.personalizationAccepted)
+            Section {
+                Button("내 정보 저장") {
+                    let cards = selectedCatalogCard.map { card in
+                        [PaymentCard(
+                            issuer: card.issuer,
+                            productId: card.productId,
+                            productName: card.productName,
+                            previousMonthSpendQualified: cardPreviousSpendQualified,
+                            monthlyBenefitRemainingAmount: max(0, Int(cardMonthlyBenefitRemaining) ?? 0)
+                        )]
+                    } ?? []
                     appState.updateProfile(
                         carrier: selectedCarrier,
                         membershipGrade: selectedMembershipGrade,
-                        monthlyBenefitStatus: selectedMonthlyBenefitStatus
+                        monthlyBenefitStatus: selectedMonthlyBenefitStatus,
+                        cards: cards
                     )
                 }
+                .fontWeight(.semibold)
+                .disabled(!appState.privacyConsent.personalizationAccepted)
             }
-            Section {
-                Label("카드 정보는 이 데모에서 수집하지 않습니다", systemImage: "creditcard.slash.fill")
-                Label("최종 혜택은 통신사 공식 앱에서 확인해 주세요", systemImage: "checkmark.shield.fill")
+            Section("개인정보") {
+                Text("쿠폰 이미지와 쿠폰·프로필·사용 기록, 로그인 계정을 삭제할 수 있어요. 결제정보는 수집하지 않고, OCR 텍스트는 AI 구조화 요청에만 전송합니다.")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
+                Button("계정 및 모든 데이터 삭제", role: .destructive) {
+                    showDeletePersonalDataConfirmation = true
+                }
             }
         }
         .navigationTitle("내 정보")
@@ -553,36 +841,89 @@ struct ContentView: View {
             selectedCarrier = appState.profile.carrier
             selectedMembershipGrade = appState.profile.membershipGrade
             selectedMonthlyBenefitStatus = appState.profile.monthlyBenefitStatus
+            if let card = appState.profile.cards.first {
+                selectedCardID = card.productId
+                cardPreviousSpendQualified = card.previousMonthSpendQualified
+                cardMonthlyBenefitRemaining = String(card.monthlyBenefitRemainingAmount)
+            }
+        }
+        .confirmationDialog("계정과 모든 데이터를 삭제할까요?", isPresented: $showDeletePersonalDataConfirmation, titleVisibility: .visible) {
+            Button("모두 삭제", role: .destructive) {
+                Task {
+                    let completed = await appState.deleteAllPersonalData()
+                    personalDataDeletionMessage = completed ? "계정과 이 기기·클라우드의 쿠폰·프로필·사용 기록을 삭제했어요." : "일부 데이터를 삭제하지 못했어요. Apple 로그인 계정은 최근 로그인 확인이 필요할 수 있어요."
+                }
+            }
+        } message: {
+            Text("로그인 계정, 이 기기의 쿠폰 이미지, 클라우드에 동기화된 쿠폰·프로필·사용 기록이 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")
+        }
+        .alert("데이터 삭제", isPresented: Binding(get: { personalDataDeletionMessage != nil }, set: { if !$0 { personalDataDeletionMessage = nil } })) {
+            Button("확인", role: .cancel) { personalDataDeletionMessage = nil }
+        } message: {
+            Text(personalDataDeletionMessage ?? "")
+        }
+        .alert("로그인", isPresented: Binding(get: { accountLoginMessage != nil }, set: { if !$0 { accountLoginMessage = nil } })) {
+            Button("확인", role: .cancel) { accountLoginMessage = nil }
+        } message: {
+            Text(accountLoginMessage ?? "")
         }
     }
 
+    private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        guard case let .success(authorization) = result,
+              let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let tokenData = credential.identityToken,
+              let idToken = String(data: tokenData, encoding: .utf8),
+              !appleSignInNonce.isEmpty else {
+            if case let .failure(error) = result { accountLoginMessage = error.localizedDescription }
+            else { accountLoginMessage = "Apple 로그인 정보를 확인하지 못했어요. 다시 시도해 주세요." }
+            return
+        }
+        Task {
+            do {
+                accountLoginMessage = try await appState.continueWithApple(idToken: idToken, rawNonce: appleSignInNonce)
+            } catch {
+                accountLoginMessage = "Apple 로그인에 실패했어요. Firebase Authentication에서 Apple 제공업체가 활성화됐는지 확인해 주세요."
+            }
+            appleSignInNonce = ""
+        }
+    }
+
+    private var selectedCatalogCard: PaymentCard? {
+        PaymentCard.catalog.first { $0.productId == selectedCardID }
+    }
+
     @discardableResult
-    private func requestRecommendation(for store: Store) async -> Recommendation? {
+    private func requestRecommendation(for store: Store, presentsFailureAlert: Bool = true) async -> Recommendation? {
         let matchingCoupons = eligibleCoupons(for: store)
         guard !matchingCoupons.isEmpty else { return nil }
         guard await appState.ensureFirebaseAuthentication() else {
-            presentRecommendationError(
-                for: store,
-                title: "보안 연결을 준비하지 못했어요",
-                message: "Firebase 익명 로그인이 아직 준비되지 않았습니다. 실제 기기에서 서명된 앱으로 실행하면 개인 쿠폰만 안전하게 불러와 추천합니다. 지금은 명시적으로 데모 추천을 볼 수 있어요."
-            )
+            if presentsFailureAlert {
+                presentRecommendationError(
+                    for: store,
+                    title: "보안 연결을 준비하지 못했어요",
+                    message: "Firebase 익명 로그인이 아직 준비되지 않았습니다. 실제 기기에서 서명된 앱으로 실행하면 개인 쿠폰만 안전하게 불러와 추천합니다. 지금은 명시적으로 데모 추천을 볼 수 있어요."
+                )
+            }
             return nil
         }
         appState.isLoadingRecommendation = true
         defer { appState.isLoadingRecommendation = false }
         let price = Int(expectedPrice) ?? 15_000
         do {
-            let recommendation = try await AgentAPIService().fetchRecommendation(for: store, expectedPrice: price, profile: appState.profile, coupons: matchingCoupons)
-            appState.recommendation = recommendation
-            appState.recommendationOrigin = .live
+            let recommendationProfile = appState.privacyConsent.personalizationAccepted ? appState.profile : .empty
+            let recommendation = try await AgentAPIService().fetchRecommendation(for: store, expectedPrice: price, profile: recommendationProfile, coupons: matchingCoupons)
+            appState.cacheRecommendation(recommendation, store: store, origin: .live)
             appState.shouldShowRecommendation = true
             return recommendation
         } catch {
-            presentRecommendationError(
-                for: store,
-                title: "실시간 추천을 불러오지 못했어요",
-                message: "인증된 추천 API 또는 공공 매장 데이터 연결을 확인해 주세요. 데모 추천은 실제 API 응답이 아니라는 표시와 함께 제공합니다."
-            )
+            if presentsFailureAlert {
+                presentRecommendationError(
+                    for: store,
+                    title: "실시간 추천을 불러오지 못했어요",
+                    message: "인증된 추천 API 또는 공공 매장 데이터 연결을 확인해 주세요. 데모 추천은 실제 API 응답이 아니라는 표시와 함께 제공합니다."
+                )
+            }
             return nil
         }
     }
@@ -597,9 +938,12 @@ struct ContentView: View {
     private func handleStoreEntry(_ store: Store) async {
         appState.setCurrentStore(store)
         let matchingCoupons = eligibleCoupons(for: store)
-        // A notification must represent a real calculated recommendation. Avoid waking the
-        // user with a generic alert at stores where no registered coupon can be used.
-        guard let recommendation = await requestRecommendation(for: store) else { return }
+        guard !matchingCoupons.isEmpty else { return }
+        // The first alert is intentionally independent of backend latency. If a temporary API
+        // failure happens in the background, the customer still receives a useful store-entry
+        // notification instead of losing the core service moment.
+        await notificationManager.notifyStoreEntry(store, couponCount: matchingCoupons.count)
+        guard let recommendation = await requestRecommendation(for: store, presentsFailureAlert: false) else { return }
         await notificationManager.notifyStoreEntry(
             store,
             couponCount: matchingCoupons.count,
@@ -615,13 +959,23 @@ struct ContentView: View {
     }
 
     private func presentDemoRecommendation(for store: Store) {
-        appState.recommendation = .preview(for: store)
-        appState.recommendationOrigin = .demo
+        appState.cacheRecommendation(.preview(for: store), store: store, origin: .demo)
         appState.shouldShowRecommendation = true
     }
 
+    private func handleNotificationTapIfNeeded() {
+        guard let storeID = notificationManager.consumePendingStoreID() else { return }
+        selectedTab = "home"
+        if appState.restoreCachedRecommendation(for: storeID) { return }
+        if let store = appState.nearbyStores.first(where: { $0.id == storeID }) ??
+            (storeID == Store.suwonDemoTwosome.id ? .suwonDemoTwosome : nil) {
+            appState.setCurrentStore(store)
+            Task { await requestRecommendation(for: store) }
+        }
+    }
+
     private func eligibleCoupons(for store: Store) -> [Coupon] {
-        appState.coupons.filter { $0.matches(store: store) }
+        appState.coupons.filter { $0.isActive && $0.matches(store: store) }
     }
 
     private func refreshNearbyStores(at coordinate: CLLocationCoordinate2D) async {
@@ -675,6 +1029,174 @@ struct ContentView: View {
         }.filter { store in
             let coordinateKey = String(format: "%.4f-%.4f", store.latitude, store.longitude)
             return seen.insert(coordinateKey).inserted
+        }
+    }
+}
+
+private struct PrivacyConsentView: View {
+    @State private var requiredProcessingAccepted = false
+    @State private var personalizationAccepted = false
+    @State private var locationPersonalizationAccepted = false
+    let onContinue: (Bool, Bool) -> Void
+
+    var body: some View {
+        ZStack {
+            LiquidBackground().ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Image(systemName: "ticket.fill")
+                        .font(.system(size: 42, weight: .bold))
+                        .foregroundStyle(.cyan)
+                        .frame(width: 74, height: 74)
+                        .background(.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+
+                    Text("쿠폰콕을 시작하기 전에")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                    Text("서비스에 꼭 필요한 처리와 선택 가능한 초개인화 항목을 분리해 안내해요.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    consentCard(
+                        title: "필수 개인정보 처리",
+                        detail: "익명 사용자 ID, 확인한 쿠폰 정보, 사용 기록을 계정 동기화와 추천 제공에 사용합니다. 쿠폰 원본 이미지는 iPhone에만 보관합니다.",
+                        isOn: $requiredProcessingAccepted,
+                        required: true
+                    )
+                    consentCard(
+                        title: "쿠폰·멤버십 초개인화",
+                        detail: "보유 쿠폰, 통신사·등급, 카드 상품명, 사용 여부를 이용해 현재 상황의 혜택 후보를 좁힙니다. 카드번호와 거래내역은 수집하지 않습니다.",
+                        isOn: $personalizationAccepted,
+                        required: false
+                    )
+                    consentCard(
+                        title: "매장 진입 위치 개인화",
+                        detail: "iOS가 주변 수원 매장 진입을 감지해 알림을 보냅니다. 위치 이력과 이동 경로는 서버에 저장하지 않습니다.",
+                        isOn: $locationPersonalizationAccepted,
+                        required: false
+                    )
+
+                    Label("생성형 AI는 쿠폰 문구와 추천 이유를 설명하며, 금액과 순위는 규칙 기반 Calculator가 확정합니다.", systemImage: "sparkles")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        onContinue(personalizationAccepted, locationPersonalizationAccepted)
+                    } label: {
+                        Text("동의하고 시작하기")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.cyan)
+                    .disabled(!requiredProcessingAccepted)
+
+                    Text("선택 동의를 거부해도 쿠폰을 직접 등록·관리할 수 있으며, 내 정보에서 언제든 변경할 수 있습니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                }
+                .padding(24)
+            }
+        }
+    }
+
+    private func consentCard(title: String, detail: String, isOn: Binding<Bool>, required: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle(isOn: isOn) {
+                HStack(spacing: 6) {
+                    Text(required ? "필수" : "선택")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(required ? Color.red : Color.cyan)
+                    Text(title).font(.headline)
+                }
+            }
+            Text(detail)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(17)
+        .background(.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(.white, lineWidth: 1) }
+    }
+}
+
+private struct CardImportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedItem: PhotosPickerItem?
+    @State private var recognition: CardRecognitionResult?
+    @State private var isAnalyzing = false
+    @State private var errorMessage: String?
+    let onUseCard: (PaymentCard) -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Label("카드 이미지는 iPhone의 Vision OCR로만 읽고 저장하거나 서버로 전송하지 않아요.", systemImage: "iphone.and.arrow.forward")
+                        .font(.footnote)
+                    Label("카드번호·유효기간·CVC는 인식 결과에서 즉시 버리고 카드사·상품명만 사용해요.", systemImage: "lock.shield.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("카드 인식") {
+                    PhotosPicker(selection: $selectedItem, matching: .images) {
+                        Label("카드 사진 선택", systemImage: "photo.badge.plus")
+                    }
+                    if isAnalyzing { ProgressView("기기에서 카드 상품을 확인하는 중") }
+                    if let card = recognition?.card {
+                        Label(card.productName, systemImage: "checkmark.seal.fill")
+                            .foregroundStyle(.teal)
+                        Button("이 카드 상품으로 입력") {
+                            onUseCard(card)
+                            dismiss()
+                        }
+                        .fontWeight(.semibold)
+                    } else if recognition != nil {
+                        Text("지원하는 카드 상품을 확실하게 찾지 못했어요. 이전 화면에서 직접 선택해 주세요.")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    }
+                    if recognition?.sensitiveNumberDetectedAndIgnored == true {
+                        Label("긴 숫자열은 감지 즉시 폐기했어요.", systemImage: "eye.slash.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let errorMessage {
+                        Text(errorMessage).font(.footnote).foregroundStyle(.red)
+                    }
+                }
+
+                Section("현재 지원") {
+                    ForEach(PaymentCard.catalog) { card in
+                        Text(card.productName)
+                    }
+                }
+            }
+            .navigationTitle("카드 상품 인식")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } } }
+            .onChange(of: selectedItem) { _, item in
+                guard let item else { return }
+                Task { await recognize(item) }
+            }
+        }
+    }
+
+    @MainActor
+    private func recognize(_ item: PhotosPickerItem) async {
+        isAnalyzing = true
+        recognition = nil
+        errorMessage = nil
+        defer { isAnalyzing = false }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else { throw OCRServiceError.invalidImage }
+            recognition = try await CouponOCRService().recognizeCardProduct(in: image)
+        } catch {
+            errorMessage = "카드 이미지를 읽지 못했어요. 다른 사진을 선택하거나 직접 입력해 주세요."
         }
     }
 }

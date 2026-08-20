@@ -1,0 +1,79 @@
+timeout: 1800s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  dynamic_substitutions: true
+
+substitutions:
+  _REGION: asia-northeast3
+  _REPOSITORY: couponcok
+  _API_IMAGE: couponcok-api
+  _MCP_IMAGE: couponcok-mcp
+  _ADK_IMAGE: couponcok-adk
+
+steps:
+  - id: backend-install
+    name: node:22
+    dir: CouponPilotBackend
+    entrypoint: npm
+    args: ["ci"]
+
+  - id: backend-build
+    name: node:22
+    dir: CouponPilotBackend
+    entrypoint: npm
+    args: ["run", "build"]
+    waitFor: ["backend-install"]
+
+  - id: backend-contract-tests
+    name: node:22
+    dir: CouponPilotBackend
+    entrypoint: npm
+    args: ["test"]
+    waitFor: ["backend-install"]
+
+  - id: adk-guardrail-tests
+    name: python:3.12-slim
+    dir: CouponPilotAgent
+    entrypoint: sh
+    args:
+      - -c
+      - pip install . pytest && python -m pytest -q tests
+
+  - id: build-api-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - CouponPilotBackend/Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_API_IMAGE}:${BUILD_ID}
+      - CouponPilotBackend
+    waitFor: ["backend-build", "backend-contract-tests"]
+
+  - id: build-mcp-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - CouponPilotBackend/Dockerfile.mcp
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_MCP_IMAGE}:${BUILD_ID}
+      - CouponPilotBackend
+    waitFor: ["backend-build", "backend-contract-tests"]
+
+  - id: build-adk-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - CouponPilotAgent/Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_ADK_IMAGE}:${BUILD_ID}
+      - CouponPilotAgent
+    waitFor: ["adk-guardrail-tests"]
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_API_IMAGE}:${BUILD_ID}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_MCP_IMAGE}:${BUILD_ID}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_ADK_IMAGE}:${BUILD_ID}

@@ -5,15 +5,26 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "test": "NODE_ENV=test tsx test/server.test.ts",
+    "test": "npm run test:safety && npm run test:golden && npm run test:api && npm run test:mcp",
+    "test:safety": "NODE_ENV=test tsx test/cloudSafety.test.ts",
+    "test:golden": "NODE_ENV=test tsx test/golden.test.ts",
+    "test:api": "NODE_ENV=test tsx test/server.test.ts",
+    "test:mcp": "tsx test/mcp.test.ts",
     "start": "node dist/server.js",
-    "ingest:benefit": "tsx scripts/ingestBenefit.ts"
+    "start:mcp": "node dist/mcpServer.js",
+    "ingest:benefit": "tsx scripts/ingestBenefit.ts",
+    "approve:benefit": "tsx scripts/approveBenefit.ts",
+    "retire:benefit": "tsx scripts/retireBenefit.ts"
   },
   "dependencies": {
-    "@google/genai": "^2.16.0",
     "@google-cloud/storage": "^7.16.0",
+    "@google/genai": "^2.16.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@opentelemetry/api": "^1.9.1",
     "express": "^5.1.0",
-    "firebase-admin": "^13.4.0"
+    "firebase-admin": "^13.4.0",
+    "google-auth-library": "^10.9.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",

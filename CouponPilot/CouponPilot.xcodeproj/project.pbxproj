@@ -27,6 +27,8 @@
 		A00100000000000000000018 /* Resources/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000016 /* Resources/Assets.xcassets */; };
 		A00100000000000000000019 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000017 /* GoogleService-Info.plist */; };
 		A00100000000000000000020 /* NearbyFranchiseFinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000018 /* NearbyFranchiseFinder.swift */; };
+		A00100000000000000000021 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = A01000000000000000000004 /* FirebaseAppCheck */; };
+		A00100000000000000000022 /* AppleSignInNonce.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000019 /* AppleSignInNonce.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +50,7 @@
 		A00200000000000000000016 /* Resources/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
 		A00200000000000000000017 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A00200000000000000000018 /* NearbyFranchiseFinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyFranchiseFinder.swift; sourceTree = "<group>"; };
+		A00200000000000000000019 /* AppleSignInNonce.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInNonce.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +61,7 @@
 				A00100000000000000000008 /* FirebaseCore in Frameworks */,
 				A00100000000000000000009 /* FirebaseAuth in Frameworks */,
 				A00100000000000000000015 /* FirebaseFirestore in Frameworks */,
+				A00100000000000000000021 /* FirebaseAppCheck in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -104,6 +108,7 @@
 				A00200000000000000000014 /* NotificationManager.swift */,
 				A00200000000000000000015 /* FirestoreRepository.swift */,
 				A00200000000000000000018 /* NearbyFranchiseFinder.swift */,
+				A00200000000000000000019 /* AppleSignInNonce.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -156,6 +161,7 @@
 				A01000000000000000000001 /* FirebaseCore */,
 				A01000000000000000000002 /* FirebaseAuth */,
 				A01000000000000000000003 /* FirebaseFirestore */,
+				A01000000000000000000004 /* FirebaseAppCheck */,
 			);
 			productName = CouponPilot;
 			productReference = A00200000000000000000008 /* CouponPilot.app */;
@@ -225,6 +231,7 @@
 				A00100000000000000000016 /* NotificationManager.swift in Sources */,
 				A00100000000000000000017 /* FirestoreRepository.swift in Sources */,
 				A00100000000000000000020 /* NearbyFranchiseFinder.swift in Sources */,
+				A00100000000000000000022 /* AppleSignInNonce.swift in Sources */,
 				A00100000000000000000006 /* ContentView.swift in Sources */,
 				A00100000000000000000007 /* RecommendationSheet.swift in Sources */,
 				A00100000000000000000010 /* CouponImportSheet.swift in Sources */,
@@ -282,6 +289,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = CouponPilot.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 5M7Y3K8P3C;
@@ -303,6 +311,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = CouponPilot.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 5M7Y3K8P3C;
@@ -369,6 +378,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A00900000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		A01000000000000000000004 /* FirebaseAppCheck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A00900000000000000000001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAppCheck;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

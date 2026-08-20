@@ -18,6 +18,10 @@ service cloud.firestore {
       match /usedCoupons/{couponID} {
         allow read, create, update, delete: if isOwner(userID);
       }
+
+      match /consents/{policyVersion} {
+        allow read, create, update, delete: if isOwner(userID);
+      }
     }
   }
 }

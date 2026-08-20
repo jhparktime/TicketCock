@@ -1,0 +1,133 @@
+# Production candidate deployment. This file never moves public API traffic by itself.
+# After smoke tests against the candidate tag, promote traffic with a reviewed gcloud command.
+timeout: 1200s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  dynamic_substitutions: true
+
+substitutions:
+  _REGION: asia-northeast3
+  _REPOSITORY: couponcok
+  _IMAGE_TAG: latest
+  _API_SERVICE: coupon-pilot-api
+  _MCP_SERVICE: couponcok-mcp
+  _ADK_SERVICE: couponcok-adk
+  _API_RUNTIME_SA: REPLACE_ME
+  _MCP_RUNTIME_SA: REPLACE_ME
+  _ADK_RUNTIME_SA: REPLACE_ME
+  _MCP_TOKEN_SECRET: REPLACE_ME
+  _ADK_TOKEN_SECRET: REPLACE_ME
+  _PSEUDONYM_TOKEN_SECRET: REPLACE_ME
+  _BENEFITS_BUCKET: coupon-pilot-benefits-601392084114
+  _CANDIDATE_TAG: candidate
+  _API_MAX_INSTANCES: "3"
+  _MCP_MAX_INSTANCES: "2"
+  _ADK_MAX_INSTANCES: "2"
+
+steps:
+  - id: release-preflight
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: sh
+    args:
+      - -ceu
+      - |
+        case "${_API_RUNTIME_SA},${_MCP_RUNTIME_SA},${_ADK_RUNTIME_SA},${_MCP_TOKEN_SECRET},${_ADK_TOKEN_SECRET},${_PSEUDONYM_TOKEN_SECRET}" in
+          *REPLACE_ME*) echo "Set runtime service accounts and per-environment token secrets before deployment."; exit 2 ;;
+        esac
+        gcloud iam service-accounts describe "${_API_RUNTIME_SA}"
+        gcloud iam service-accounts describe "${_MCP_RUNTIME_SA}"
+        gcloud iam service-accounts describe "${_ADK_RUNTIME_SA}"
+        gcloud secrets describe "${_MCP_TOKEN_SECRET}"
+        gcloud secrets describe "${_ADK_TOKEN_SECRET}"
+        gcloud secrets describe "${_PSEUDONYM_TOKEN_SECRET}"
+
+  - id: deploy-private-mcp
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_MCP_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/couponcok-mcp:${_IMAGE_TAG}
+      - --region=${_REGION}
+      - --service-account=${_MCP_RUNTIME_SA}
+      - --no-allow-unauthenticated
+      - --min-instances=0
+      - --max-instances=${_MCP_MAX_INSTANCES}
+      - --concurrency=20
+      - --cpu=1
+      - --memory=512Mi
+      - --update-env-vars=VERTEX_PROJECT_ID=${PROJECT_ID},VERTEX_LOCATION=global,BENEFITS_BUCKET=${_BENEFITS_BUCKET},BENEFIT_RAG_MIN_SCORE=0.35,BENEFIT_RUNTIME_SEED_PERSIST=false
+      - --update-secrets=MCP_INTERNAL_TOKEN=${_MCP_TOKEN_SECRET}:latest,DATA_GO_KR_SERVICE_KEY=DATA_GO_KR_SERVICE_KEY:latest
+    waitFor: [release-preflight]
+
+  - id: resolve-mcp-url
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: sh
+    args:
+      - -ceu
+      - |
+        MCP_URL="$$(gcloud run services describe ${_MCP_SERVICE} --region=${_REGION} --format='value(status.url)')"
+        test -n "$$MCP_URL"
+        printf 'MCP_SERVER_URL=%s/mcp\n' "$$MCP_URL" > /workspace/runtime-urls.env
+    waitFor: [deploy-private-mcp]
+
+  - id: deploy-private-adk-shadow
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: sh
+    args:
+      - -ceu
+      - |
+        . /workspace/runtime-urls.env
+        gcloud run deploy ${_ADK_SERVICE} \
+          --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/couponcok-adk:${_IMAGE_TAG} \
+          --region=${_REGION} \
+          --service-account=${_ADK_RUNTIME_SA} \
+          --no-allow-unauthenticated \
+          --min-instances=0 \
+          --max-instances=${_ADK_MAX_INSTANCES} \
+          --concurrency=8 \
+          --cpu=1 \
+          --memory=1Gi \
+          --update-env-vars=GOOGLE_GENAI_USE_VERTEXAI=1,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=global,MCP_SERVER_URL="$$MCP_SERVER_URL" \
+          --update-secrets=MCP_INTERNAL_TOKEN=${_MCP_TOKEN_SECRET}:latest,ADK_INTERNAL_TOKEN=${_ADK_TOKEN_SECRET}:latest
+    waitFor: [resolve-mcp-url]
+
+  - id: resolve-adk-url
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: sh
+    args:
+      - -ceu
+      - |
+        ADK_URL="$$(gcloud run services describe ${_ADK_SERVICE} --region=${_REGION} --format='value(status.url)')"
+        test -n "$$ADK_URL"
+        printf 'ADK_ORCHESTRATOR_URL=%s\n' "$$ADK_URL" >> /workspace/runtime-urls.env
+    waitFor: [deploy-private-adk-shadow]
+
+  - id: deploy-api-candidate
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: sh
+    args:
+      - -ceu
+      - |
+        . /workspace/runtime-urls.env
+        gcloud run deploy ${_API_SERVICE} \
+          --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/couponcok-api:${_IMAGE_TAG} \
+          --region=${_REGION} \
+          --service-account=${_API_RUNTIME_SA} \
+          --no-allow-unauthenticated \
+          --no-traffic \
+          --tag=${_CANDIDATE_TAG} \
+          --timeout=20s \
+          --min-instances=0 \
+          --max-instances=${_API_MAX_INSTANCES} \
+          --concurrency=40 \
+          --cpu=1 \
+          --memory=512Mi \
+          --update-env-vars=ADK_ORCHESTRATION_MODE=shadow,ADK_SHADOW_SAMPLE_RATE=0.10,ADK_ORCHESTRATOR_URL="$$ADK_ORCHESTRATOR_URL",VERTEX_PROJECT_ID=${PROJECT_ID},VERTEX_LOCATION=global,BENEFITS_BUCKET=${_BENEFITS_BUCKET},BENEFIT_RAG_MIN_SCORE=0.35,BENEFIT_RUNTIME_SEED_PERSIST=false,APP_CHECK_ENFORCEMENT_MODE=monitor \
+          --update-secrets=ADK_INTERNAL_TOKEN=${_ADK_TOKEN_SECRET}:latest,PSEUDONYMIZATION_KEY=${_PSEUDONYM_TOKEN_SECRET}:latest,DATA_GO_KR_SERVICE_KEY=DATA_GO_KR_SERVICE_KEY:latest
+    waitFor: [resolve-adk-url]
+
+# Promotion is deliberately manual and must follow authenticated candidate smoke tests:
+# gcloud run services update-traffic ${_API_SERVICE} --region=${_REGION} --to-tags=${_CANDIDATE_TAG}=10

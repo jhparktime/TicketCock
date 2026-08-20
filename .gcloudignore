@@ -1,0 +1,14 @@
+# Keep Cloud Build source focused on the CouponCock service.
+.gcloudignore
+.git
+.gitignore
+#!include:.gitignore
+
+# Local agents, quiz artifacts and prior build output are not runtime inputs.
+.tmp/
+adk-part2-quiz/
+outputs/
+work/
+**/__pycache__/
+**/.pytest_cache/
+**/.DS_Store

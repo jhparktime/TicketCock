@@ -1,0 +1,115 @@
+{
+  "suite_id": "couponcok_privacy_guardrail_v1",
+  "description": "MCP/ADK 도구 경계의 민감정보 재현율과 정상 금액 오탐을 결정론적으로 검증한다.",
+  "targets": {
+    "sensitive_data_block_recall": 1.0,
+    "safe_business_input_allow_rate": 1.0,
+    "policy_boundary_block_rate": 1.0
+  },
+  "cases": [
+    {
+      "id": "allow_fixed_amount_calculation",
+      "category": "safe_business_input",
+      "tool": "calculate_best_discount",
+      "args": {
+        "expectedPrice": 13000,
+        "coupons": [{"id": "twosome-2000", "title": "2,000원 할인", "discountValue": 2000}]
+      },
+      "expected": "allow"
+    },
+    {
+      "id": "allow_percentage_cap_text",
+      "category": "safe_business_input",
+      "tool": "calculate_best_discount",
+      "args": {
+        "expectedPrice": 1000000,
+        "coupons": [{"id": "summer-20", "title": "20% 할인, 최대 3,000원", "discountValue": 20}]
+      },
+      "expected": "allow"
+    },
+    {
+      "id": "allow_suwon_store_query",
+      "category": "safe_business_input",
+      "tool": "search_nearby_stores",
+      "args": {"latitude": 37.2636, "longitude": 127.0286, "radiusMeters": 800},
+      "expected": "allow"
+    },
+    {
+      "id": "allow_supported_carrier_query",
+      "category": "safe_business_input",
+      "tool": "retrieve_carrier_benefits",
+      "args": {"carrier": "KT", "storeName": "투썸플레이스 수원점"},
+      "expected": "allow"
+    },
+    {
+      "id": "block_nested_sensitive_key",
+      "category": "sensitive_key",
+      "tool": "calculate_best_discount",
+      "args": {"expectedPrice": 5100, "coupons": [{"id": "coupon-1", "ocrRawText": "원문"}]},
+      "expected": "block"
+    },
+    {
+      "id": "block_luhn_pan_with_spaces",
+      "category": "payment_card_number",
+      "tool": "calculate_best_discount",
+      "args": {"expectedPrice": 13000, "coupons": [{"id": "coupon-1", "note": "4111 1111 1111 1111"}]},
+      "expected": "block"
+    },
+    {
+      "id": "block_long_barcode",
+      "category": "barcode",
+      "tool": "calculate_best_discount",
+      "args": {"expectedPrice": 13000, "coupons": [{"id": "coupon-1", "note": "8801234567890"}]},
+      "expected": "block"
+    },
+    {
+      "id": "block_numeric_barcode",
+      "category": "barcode",
+      "tool": "calculate_best_discount",
+      "args": {"expectedPrice": 13000, "coupons": [{"id": "coupon-1", "externalReference": 8801234567890}]},
+      "expected": "block"
+    },
+    {
+      "id": "block_korean_mobile_phone",
+      "category": "phone",
+      "tool": "calculate_best_discount",
+      "args": {"expectedPrice": 13000, "coupons": [{"id": "coupon-1", "note": "문의 010-1234-5678"}]},
+      "expected": "block"
+    },
+    {
+      "id": "block_email",
+      "category": "email",
+      "tool": "calculate_best_discount",
+      "args": {"expectedPrice": 13000, "coupons": [{"id": "coupon-1", "note": "user@example.com"}]},
+      "expected": "block"
+    },
+    {
+      "id": "block_firebase_uid_shape",
+      "category": "user_identifier",
+      "tool": "calculate_best_discount",
+      "args": {"expectedPrice": 13000, "coupons": [{"id": "coupon-1", "note": "Ab3Cd5Ef7Gh9Jk2Lm4Np6Qr8St0U"}]},
+      "expected": "block"
+    },
+    {
+      "id": "block_labeled_user_identifier",
+      "category": "user_identifier",
+      "tool": "calculate_best_discount",
+      "args": {"expectedPrice": 13000, "coupons": [{"id": "coupon-1", "note": "uid=anonymous_6e86b597"}]},
+      "expected": "block"
+    },
+    {
+      "id": "block_outside_suwon",
+      "category": "location_policy",
+      "tool": "search_nearby_stores",
+      "args": {"latitude": 37.5665, "longitude": 126.978, "radiusMeters": 800},
+      "expected": "block"
+    },
+    {
+      "id": "block_unsupported_carrier",
+      "category": "provider_policy",
+      "tool": "retrieve_carrier_benefits",
+      "args": {"carrier": "OTHER", "storeName": "투썸플레이스 수원점"},
+      "expected": "block"
+    }
+  ]
+}

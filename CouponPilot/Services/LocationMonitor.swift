@@ -32,6 +32,8 @@ final class LocationMonitor: NSObject, ObservableObject {
     var onStoreEntry: ((Store) -> Void)?
     var onLocationUpdate: ((CLLocationCoordinate2D) -> Void)?
     @Published private(set) var monitoringState: MonitoringState = .idle
+    @Published private(set) var availableStoreCount = 0
+    @Published private(set) var monitoredStoreCount = 0
 
     override init() {
         super.init()
@@ -45,6 +47,10 @@ final class LocationMonitor: NSObject, ObservableObject {
         resumeMonitoringIfEnabled()
     }
 
+    /// iOS allows 20 regions at once. Keep the limit visible to the UI instead of silently
+    /// pretending that every nearby store is monitored.
+    var isAtRegionLimit: Bool { availableStoreCount > monitoredStoreCount }
+
     /// Restores a user's opt-in after relaunch. This is called only after the SwiftUI view
     /// installs its location callbacks, so the first position result is not dropped.
     func resumeMonitoringIfEnabled() {
@@ -55,12 +61,11 @@ final class LocationMonitor: NSObject, ObservableObject {
             manager.requestLocation()
         case .authorizedWhenInUse:
             monitoringState = .needsAlwaysAuthorization
-            manager.requestAlwaysAuthorization()
         case .denied, .restricted:
             monitoringState = .denied
         case .notDetermined:
             monitoringState = .requestingPermission
-            manager.requestAlwaysAuthorization()
+            manager.requestWhenInUseAuthorization()
         @unknown default:
             monitoringState = .denied
         }
@@ -72,12 +77,20 @@ final class LocationMonitor: NSObject, ObservableObject {
             manager.requestLocation()
         case .notDetermined:
             monitoringState = .requestingPermission
-            manager.requestAlwaysAuthorization()
+            manager.requestWhenInUseAuthorization()
         case .denied, .restricted:
             monitoringState = .denied
         @unknown default:
             monitoringState = .denied
         }
+    }
+
+    /// Requested only after the user explicitly asks for background store-entry alerts.
+    /// This avoids stacking the location and notification permission dialogs on first launch.
+    func requestBackgroundAuthorization() {
+        guard isMonitoringEnabled, manager.authorizationStatus == .authorizedWhenInUse else { return }
+        monitoringState = .needsAlwaysAuthorization
+        manager.requestAlwaysAuthorization()
     }
 
     private func startMonitoring() {
@@ -99,7 +112,9 @@ final class LocationMonitor: NSObject, ObservableObject {
         manager.monitoredRegions
             .filter { !incomingIDs.contains($0.identifier) }
             .forEach(manager.stopMonitoring)
+        availableStoreCount = stores.count
         monitoredStores = Array(stores.prefix(20))
+        monitoredStoreCount = monitoredStores.count
         for store in monitoredStores { knownStoresByID[store.id] = store }
         if isMonitoringEnabled && manager.authorizationStatus == .authorizedAlways {
             startMonitoring()
@@ -111,6 +126,8 @@ final class LocationMonitor: NSObject, ObservableObject {
         UserDefaults.standard.set(false, forKey: Self.monitoringEnabledKey)
         manager.monitoredRegions.forEach(manager.stopMonitoring)
         monitoredStores = []
+        availableStoreCount = 0
+        monitoredStoreCount = 0
         knownStoresByID.removeAll()
         storesCurrentlyInside.removeAll()
         monitoringState = .idle

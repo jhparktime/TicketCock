@@ -22,35 +22,109 @@ final class FirestoreRepository {
             "carrier": profile.carrier,
             "membershipGrade": profile.membershipGrade,
             "monthlyBenefitStatus": profile.monthlyBenefitStatus.rawValue,
+            "cards": profile.cards.map { card in
+                [
+                    "issuer": card.issuer,
+                    "productId": card.productId,
+                    "productName": card.productName,
+                    "previousMonthSpendQualified": card.previousMonthSpendQualified,
+                    "monthlyBenefitRemainingAmount": card.monthlyBenefitRemainingAmount
+                ]
+            },
             "updatedAt": FieldValue.serverTimestamp()
         ], merge: true)
     }
 
-    func save(coupon: Coupon, uid: String) async throws {
+    func clearPersonalization(uid: String) async throws {
+        try await database.collection("users").document(uid).setData([
+            "carrier": FieldValue.delete(),
+            "membershipGrade": FieldValue.delete(),
+            "monthlyBenefitStatus": FieldValue.delete(),
+            "cards": FieldValue.delete(),
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+    }
+
+    func save(consent: PrivacyConsent, uid: String) async throws {
         var data: [String: Any] = [
-            "brand": coupon.brand, "title": coupon.title, "discountType": coupon.discountType.rawValue,
-            "discountValue": coupon.discountValue, "minimumOrderAmount": coupon.minimumOrderAmount,
-            "expiresAt": Timestamp(date: coupon.expiresAt), "combinableWithCard": coupon.combinableWithCard,
-            "conditions": coupon.conditions, "updatedAt": FieldValue.serverTimestamp()
+            "policyVersion": consent.policyVersion,
+            "requiredProcessingAccepted": consent.requiredProcessingAccepted,
+            "personalizationAccepted": consent.personalizationAccepted,
+            "locationPersonalizationAccepted": consent.locationPersonalizationAccepted,
+            "updatedAt": FieldValue.serverTimestamp()
         ]
-        if let referencePrice = coupon.referencePrice { data["referencePrice"] = referencePrice }
-        try await database.collection("users").document(uid).collection("coupons").document(coupon.id).setData(data, merge: true)
+        if let acceptedAt = consent.acceptedAt { data["acceptedAt"] = Timestamp(date: acceptedAt) }
+        try await database.collection("users").document(uid).collection("consents")
+            .document(consent.policyVersion).setData(data, merge: true)
+    }
+
+    func save(coupon: Coupon, uid: String) async throws {
+        let user = database.collection("users").document(uid)
+        var data = couponData(coupon)
+        data["updatedAt"] = FieldValue.serverTimestamp()
+        let batch = database.batch()
+        batch.setData(data, forDocument: user.collection("coupons").document(coupon.id), merge: true)
+        batch.deleteDocument(user.collection("usedCoupons").document(coupon.id))
+        try await batch.commit()
     }
 
     func moveToUsedHistory(coupon: Coupon, uid: String) async throws {
+        try await save(usedCoupon: UsedCoupon(coupon: coupon), uid: uid)
+    }
+
+    func save(usedCoupon: UsedCoupon, uid: String) async throws {
         let user = database.collection("users").document(uid)
-        try await user.collection("usedCoupons").document(coupon.id).setData([
-            "brand": coupon.brand, "productName": coupon.title, "expiresAt": Timestamp(date: coupon.expiresAt),
-            "usedAt": FieldValue.serverTimestamp(), "source": "CouponPilot"
-        ])
-        try await user.collection("coupons").document(coupon.id).delete()
+        let batch = database.batch()
+        var data: [String: Any] = [
+            "brand": usedCoupon.brand,
+            "productName": usedCoupon.productName,
+            "expiresAt": Timestamp(date: usedCoupon.expiresAt),
+            "usedAt": Timestamp(date: usedCoupon.usedAt),
+            "source": usedCoupon.source
+        ]
+        if let originalCoupon = usedCoupon.originalCoupon {
+            data["originalCoupon"] = couponData(originalCoupon)
+        }
+        batch.setData(data, forDocument: user.collection("usedCoupons").document(usedCoupon.id), merge: true)
+        batch.deleteDocument(user.collection("coupons").document(usedCoupon.id))
+        try await batch.commit()
+    }
+
+    /// Deletes only the authenticated user's application records. Coupon images live on the
+    /// device and are removed by AppState separately; no raw OCR text is stored in Firestore.
+    func deleteAllUserData(uid: String) async throws {
+        let user = database.collection("users").document(uid)
+        async let couponSnapshot = user.collection("coupons").getDocuments()
+        async let usedCouponSnapshot = user.collection("usedCoupons").getDocuments()
+        async let consentSnapshot = user.collection("consents").getDocuments()
+        let (coupons, usedCoupons, consents) = try await (couponSnapshot, usedCouponSnapshot, consentSnapshot)
+        let batch = database.batch()
+        coupons.documents.forEach { batch.deleteDocument($0.reference) }
+        usedCoupons.documents.forEach { batch.deleteDocument($0.reference) }
+        consents.documents.forEach { batch.deleteDocument($0.reference) }
+        batch.deleteDocument(user)
+        try await batch.commit()
     }
 
     private func profile(from data: [String: Any], fallbackID: String) -> UserProfile? {
         guard let carrier = data["carrier"] as? String else { return nil }
         let grade = data["membershipGrade"] as? String ?? "확인 필요"
         let status = UserProfile.MonthlyBenefitStatus(rawValue: data["monthlyBenefitStatus"] as? String ?? "") ?? .unknown
-        return UserProfile(id: fallbackID, carrier: carrier, membershipGrade: grade, monthlyBenefitStatus: status)
+        let cards = (data["cards"] as? [[String: Any]] ?? []).compactMap { card -> PaymentCard? in
+            guard let issuer = card["issuer"] as? String,
+                  let productId = card["productId"] as? String,
+                  let productName = card["productName"] as? String,
+                  let previousMonthSpendQualified = card["previousMonthSpendQualified"] as? Bool,
+                  let monthlyBenefitRemainingAmount = card["monthlyBenefitRemainingAmount"] as? Int else { return nil }
+            return PaymentCard(
+                issuer: issuer,
+                productId: productId,
+                productName: productName,
+                previousMonthSpendQualified: previousMonthSpendQualified,
+                monthlyBenefitRemainingAmount: monthlyBenefitRemainingAmount
+            )
+        }
+        return UserProfile(id: fallbackID, carrier: carrier, membershipGrade: grade, monthlyBenefitStatus: status, cards: cards)
     }
 
     private func coupon(from data: [String: Any], id: String) -> Coupon? {
@@ -63,7 +137,8 @@ final class FirestoreRepository {
               let expiresAt = (data["expiresAt"] as? Timestamp)?.dateValue(),
               let combinableWithCard = data["combinableWithCard"] as? Bool else { return nil }
         return Coupon(id: id, brand: brand, title: title, discountType: discountType, discountValue: discountValue,
-                      minimumOrderAmount: minimumOrderAmount, expiresAt: expiresAt, combinableWithCard: combinableWithCard,
+                      minimumOrderAmount: minimumOrderAmount, maximumDiscount: data["maximumDiscount"] as? Int,
+                      expiresAt: expiresAt, combinableWithCard: combinableWithCard,
                       referencePrice: data["referencePrice"] as? Int,
                       conditions: data["conditions"] as? [String] ?? [], localImageFilename: nil)
     }
@@ -73,6 +148,7 @@ final class FirestoreRepository {
               let productName = data["productName"] as? String,
               let expiresAt = (data["expiresAt"] as? Timestamp)?.dateValue() else { return nil }
         let usedAt = (data["usedAt"] as? Timestamp)?.dateValue() ?? .now
+        let originalCoupon = (data["originalCoupon"] as? [String: Any]).flatMap { coupon(from: $0, id: id) }
         return UsedCoupon(
             id: id,
             brand: brand,
@@ -81,7 +157,24 @@ final class FirestoreRepository {
             orderNumber: "앱에서 사용 처리",
             barcodeLast4: "-",
             usedAt: usedAt,
-            source: data["source"] as? String ?? "CouponPilot"
+            source: data["source"] as? String ?? "CouponPilot",
+            originalCoupon: originalCoupon
         )
+    }
+
+    private func couponData(_ coupon: Coupon) -> [String: Any] {
+        var data: [String: Any] = [
+            "brand": coupon.brand,
+            "title": coupon.title,
+            "discountType": coupon.discountType.rawValue,
+            "discountValue": coupon.discountValue,
+            "minimumOrderAmount": coupon.minimumOrderAmount,
+            "expiresAt": Timestamp(date: coupon.expiresAt),
+            "combinableWithCard": coupon.combinableWithCard,
+            "conditions": coupon.conditions
+        ]
+        if let referencePrice = coupon.referencePrice { data["referencePrice"] = referencePrice }
+        if let maximumDiscount = coupon.maximumDiscount { data["maximumDiscount"] = maximumDiscount }
+        return data
     }
 }
