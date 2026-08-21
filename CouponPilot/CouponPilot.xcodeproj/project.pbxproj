@@ -25,7 +25,6 @@
 		A00100000000000000000016 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000014 /* NotificationManager.swift */; };
 		A00100000000000000000017 /* FirestoreRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000015 /* FirestoreRepository.swift */; };
 		A00100000000000000000018 /* Resources/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000016 /* Resources/Assets.xcassets */; };
-		A00100000000000000000019 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000017 /* GoogleService-Info.plist */; };
 		A00100000000000000000020 /* NearbyFranchiseFinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000018 /* NearbyFranchiseFinder.swift */; };
 		A00100000000000000000021 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = A01000000000000000000004 /* FirebaseAppCheck */; };
 		A00100000000000000000022 /* AppleSignInNonce.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000019 /* AppleSignInNonce.swift */; };
@@ -48,7 +47,6 @@
 		A00200000000000000000014 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		A00200000000000000000015 /* FirestoreRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreRepository.swift; sourceTree = "<group>"; };
 		A00200000000000000000016 /* Resources/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
-		A00200000000000000000017 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A00200000000000000000018 /* NearbyFranchiseFinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyFranchiseFinder.swift; sourceTree = "<group>"; };
 		A00200000000000000000019 /* AppleSignInNonce.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInNonce.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -77,7 +75,6 @@
 				A00300000000000000000005 /* Views */,
 				A00300000000000000000007 /* Resources/UsedCoupons */,
 				A00200000000000000000016 /* Resources/Assets.xcassets */,
-				A00200000000000000000017 /* GoogleService-Info.plist */,
 				A00300000000000000000006 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -211,7 +208,6 @@
 				A00100000000000000000013 /* used-starbucks-3336977781.png in Resources */,
 				A00100000000000000000014 /* used-starbucks-3349217463.png in Resources */,
 				A00100000000000000000018 /* Resources/Assets.xcassets in Resources */,
-				A00100000000000000000019 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -206,17 +206,17 @@ struct ContentView: View {
                 LiquidBackground()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 22) {
+                    VStack(spacing: 18) {
                         topBar
-                        locationPill
                         nearbyStoreHero
+                        locationPill
                         if !expiringCoupons.isEmpty { expiringCouponSection }
                         quickCouponSection
                         priceCard
                         usedCouponSection
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
                     .padding(.bottom, 118)
                 }
             }
@@ -226,38 +226,39 @@ struct ContentView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 14) {
+        HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(syncStatusTitle)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(appState.cloudSyncState == .needsRetry ? AppPalette.warning : AppPalette.ink.opacity(0.62))
-                Text("오늘의 혜택")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                Text("김우리님")
+                    .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
+                    .underline()
+                Text(syncStatusTitle)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(appState.cloudSyncState == .needsRetry ? AppPalette.warning : AppPalette.muted)
             }
             Spacer()
-            Button {
-                if appState.cloudSyncState == .needsRetry {
-                    appState.retryCloudSync()
+            HStack(spacing: 18) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "bell")
+                    Circle()
+                        .fill(AppPalette.warning)
+                        .frame(width: 7, height: 7)
+                        .offset(x: 4, y: -5)
                 }
-            } label: {
-                ZStack {
-                    Circle().fill(.white.opacity(0.15))
-                    if appState.cloudSyncState == .syncing {
-                        ProgressView().tint(AppPalette.ink)
-                    } else {
-                        Image(systemName: syncStatusIcon)
-                            .font(.title3)
-                            .foregroundStyle(appState.cloudSyncState == .needsRetry ? AppPalette.warning : AppPalette.ink)
+                Button {
+                    if appState.cloudSyncState == .needsRetry {
+                        appState.retryCloudSync()
                     }
+                } label: {
+                    Image(systemName: syncStatusIcon)
                 }
-                .frame(width: 48, height: 48)
-                .overlay { Circle().stroke(AppPalette.ink.opacity(0.12), lineWidth: 1) }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(syncStatusTitle)
-            .accessibilityHint(appState.cloudSyncState == .needsRetry ? "탭하여 클라우드 동기화를 다시 시도합니다" : "쿠폰 동기화 상태입니다")
+            .font(.system(size: 24, weight: .medium))
+            .foregroundStyle(AppPalette.ink)
         }
+        .padding(.top, 8)
     }
 
     private var syncStatusTitle: String {
@@ -319,9 +320,8 @@ struct ContentView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(.white.opacity(0.88), in: Capsule())
-        .overlay { Capsule().stroke(AppPalette.ink.opacity(0.10), lineWidth: 1) }
-        .shadow(color: AppPalette.ink.opacity(0.05), radius: 12, y: 5)
+        .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AppPalette.border, lineWidth: 1) }
     }
 
     private var locationMonitoringBinding: Binding<Bool> {
@@ -355,90 +355,51 @@ struct ContentView: View {
     }
 
     private var nearbyStoreHero: some View {
-        return VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 20) {
             if let store = appState.currentStore {
                 let matchingCoupons = eligibleCoupons(for: store)
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack(spacing: 6) {
-                            Circle().fill(AppPalette.accent).frame(width: 8, height: 8)
-                            Text("매장 진입 감지됨")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(AppPalette.accent)
-                        }
-                        Text(store.name)
-                            .font(.system(size: 30, weight: .bold, design: .rounded))
-                            .lineSpacing(-2)
-                            .lineLimit(2)
-                        Text(matchingCoupons.isEmpty ? "이 매장에 맞는 등록 쿠폰이 없어요" : "사용 가능한 쿠폰 \(matchingCoupons.count)장 · \(appState.profile.carrier) 멤버십 비교")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.72))
-                    }
-                    Spacer()
-                    Image(systemName: "cup.and.saucer.fill")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 60, height: 60)
-                        .background(.white.opacity(0.16), in: Circle())
-                        .overlay { Circle().stroke(.white.opacity(0.28), lineWidth: 1) }
-                }
+                Text("쿠폰콕이 \(store.name)의\n혜택을 비교해드릴게요")
+                    .font(.system(size: 30, weight: .bold))
+                    .lineSpacing(2)
+                    .foregroundStyle(AppPalette.ink)
 
-                HStack(spacing: 14) {
-                    heroMetric(value: appState.recommendation?.storeName == store.name ? "\(appState.recommendation!.recommendedOption.savings.formatted())원" : "\(matchingCoupons.count)장", label: appState.recommendation?.storeName == store.name ? "계산된 절약" : "매칭 쿠폰")
-                    Divider().overlay(.white.opacity(0.22))
-                    heroMetric(value: appState.recommendation?.storeName == store.name ? "\(appState.recommendation!.recommendedOption.finalPrice.formatted())원" : "\(store.radiusMeters.formatted(.number.precision(.fractionLength(0))))m", label: appState.recommendation?.storeName == store.name ? "예상 결제" : "알림 반경")
-                }
-                .padding(.vertical, 14)
-                .padding(.horizontal, 16)
-                .background(.black.opacity(0.15), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                Text(matchingCoupons.isEmpty ? "이 매장에 맞는 등록 쿠폰이 없어요" : "사용 가능한 쿠폰 \(matchingCoupons.count)장과 \(appState.profile.carrier) 멤버십을 함께 확인합니다.")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(AppPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Button {
                     Task { await requestRecommendation(for: store) }
                 } label: {
-                    HStack(spacing: 9) {
+                    HStack(spacing: 8) {
                         if appState.isLoadingRecommendation {
-                            ProgressView().tint(.white)
+                            ProgressView().tint(AppPalette.accent)
                         } else {
-                            Image(systemName: "sparkles")
+                            Image(systemName: "sparkles.rectangle.stack.fill")
                         }
                         Text(appState.isLoadingRecommendation ? "혜택 계산 중" : matchingCoupons.isEmpty ? "매칭 쿠폰이 없어요" : "AI 조합 추천받기")
                     }
-                    .font(.headline)
+                    .font(.system(size: 17, weight: .bold))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, 15)
                 }
-                .buttonStyle(PrimaryGlassButtonStyle())
+                .buttonStyle(WooriPrimaryButtonStyle())
                 .disabled(appState.isLoadingRecommendation || matchingCoupons.isEmpty)
 
-                Label("생성형 AI가 쿠폰 문구와 추천 이유를 설명해요. 금액·순위는 규칙 기반 Calculator가 확정합니다.", systemImage: "info.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.78))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel("인공지능 사용 안내. 생성형 인공지능은 쿠폰 문구와 추천 이유를 설명하며, 금액과 순위는 규칙 기반 계산기가 확정합니다.")
-            } else {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack(spacing: 6) {
-                            Circle().fill(AppPalette.accent).frame(width: 8, height: 8)
-                            Text(AppState.isSubmissionSimulation ? "매장 진입 흐름 준비" : "현재 위치 확인 중")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(AppPalette.accent)
-                        }
-                        Text(AppState.isSubmissionSimulation ? "투썸플레이스에서\n쿠폰을 비교해 볼까요?" : "매장에 들어가면\n혜택을 알려드릴게요")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .lineSpacing(-2)
-                        Text(AppState.isSubmissionSimulation ? "등록 쿠폰 2장을 Calculator Tool로 비교합니다" : appState.storeDirectoryState.message)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.72))
-                    }
-                    Spacer()
-                    Image(systemName: "location.viewfinder")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 60, height: 60)
-                        .background(.white.opacity(0.16), in: Circle())
-                        .overlay { Circle().stroke(.white.opacity(0.28), lineWidth: 1) }
+                HStack(spacing: 12) {
+                    heroMetric(value: appState.recommendation?.storeName == store.name ? "\(appState.recommendation!.recommendedOption.savings.formatted())원" : "\(matchingCoupons.count)장", label: appState.recommendation?.storeName == store.name ? "계산된 절약" : "매칭 쿠폰")
+                    Divider().overlay(AppPalette.border)
+                    heroMetric(value: appState.recommendation?.storeName == store.name ? "\(appState.recommendation!.recommendedOption.finalPrice.formatted())원" : "\(store.radiusMeters.formatted(.number.precision(.fractionLength(0))))m", label: appState.recommendation?.storeName == store.name ? "예상 결제" : "알림 반경")
                 }
+            } else {
+                Text(AppState.isSubmissionSimulation ? "투썸플레이스에서\n쿠폰을 비교해 볼까요?" : "매장에 들어가면\n혜택을 알려드릴게요")
+                    .font(.system(size: 30, weight: .bold))
+                    .lineSpacing(2)
+                    .foregroundStyle(AppPalette.ink)
+
+                Text(AppState.isSubmissionSimulation ? "등록 쿠폰 2장을 Calculator Tool로 비교합니다." : appState.storeDirectoryState.message)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(AppPalette.muted)
 
             if !AppState.isSubmissionSimulation {
                 Button {
@@ -457,11 +418,11 @@ struct ContentView: View {
                                 : "위치 개인화 동의하고 시작",
                             systemImage: "location.fill"
                         )
-                            .font(.headline)
+                            .font(.system(size: 17, weight: .bold))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
+                            .padding(.vertical, 15)
                     }
-                    .buttonStyle(PrimaryGlassButtonStyle())
+                    .buttonStyle(WooriPrimaryButtonStyle())
             }
 
             if !AppState.isSubmissionSimulation, locationMonitor.monitoringState == .denied {
@@ -478,33 +439,29 @@ struct ContentView: View {
                     Task { await handleSubmissionStoreEntry() }
                 } label: {
                     Label("투썸플레이스 수원시청점 도착", systemImage: "location.fill.viewfinder")
-                        .font(.headline)
+                        .font(.system(size: 17, weight: .bold))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+                        .padding(.vertical, 15)
                 }
-                .buttonStyle(PrimaryGlassButtonStyle())
+                .buttonStyle(WooriPrimaryButtonStyle())
                 .accessibilityHint("매장 진입 알림과 쿠폰 추천 흐름을 확인합니다")
             }
 
         }
         }
-        .padding(21)
-        .background(
-            LinearGradient(
-                colors: [AppPalette.accent.opacity(0.78), AppPalette.aurora.opacity(0.54), AppPalette.accent.opacity(0.32)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 32, style: .continuous)
-        )
-        .overlay { RoundedRectangle(cornerRadius: 32, style: .continuous).stroke(.white.opacity(0.58), lineWidth: 1) }
-        .shadow(color: AppPalette.aurora.opacity(0.20), radius: 22, y: 10)
+        .padding(.horizontal, 8)
+        .padding(.top, 20)
+        .padding(.bottom, 6)
     }
 
     private func heroMetric(value: String, label: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(value).font(.headline.weight(.bold))
-            Text(label).font(.caption).foregroundStyle(.white.opacity(0.6))
+            Text(value)
+                .font(.system(size: 21, weight: .bold))
+                .foregroundStyle(AppPalette.ink)
+            Text(label)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(AppPalette.muted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -513,16 +470,17 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("바로 쓸 쿠폰")
-                    .font(.title3.weight(.bold))
+                    .font(.system(size: 23, weight: .bold))
                 Spacer()
                 Button {
                     showCouponImporter = true
                 } label: {
-                    Label("쿠폰 추가", systemImage: "plus")
-                        .font(.caption.weight(.bold))
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(AppPalette.accent)
                 }
                 .frame(minWidth: 44, minHeight: 44)
+                .accessibilityLabel("쿠폰 추가")
             }
 
             if appState.coupons.isEmpty {
@@ -547,23 +505,21 @@ struct ContentView: View {
                     }
                     .padding(17)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .background(.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(AppPalette.border, lineWidth: 1) }
                 }
                 .buttonStyle(.plain)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(appState.coupons) { coupon in
-                            NavigationLink {
-                                CouponDetailView(coupon: coupon)
-                            } label: {
-                                couponCard(coupon)
-                            }
-                            .buttonStyle(.plain)
+                VStack(spacing: 12) {
+                    ForEach(appState.coupons.prefix(3)) { coupon in
+                        NavigationLink {
+                            CouponDetailView(coupon: coupon)
+                        } label: {
+                            couponCard(coupon)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 1)
             }
         }
     }
@@ -576,7 +532,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("곧 만료되는 쿠폰", systemImage: "clock.badge.exclamationmark.fill")
-                    .font(.title3.weight(.bold))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(AppPalette.warning)
                 Spacer()
                 Text("7일 이내")
@@ -596,52 +552,59 @@ struct ContentView: View {
                         .font(.caption.weight(.bold)).foregroundStyle(AppPalette.warning)
                 }
                 .padding(14)
-                .background(AppPalette.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AppPalette.warning.opacity(0.18), lineWidth: 1) }
             }
         }
     }
 
     private func couponCard(_ coupon: Coupon) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(AppPalette.couponBlue)
                 Image(systemName: "ticket.fill")
-                    .foregroundStyle(AppPalette.accent)
-                    .font(.title2)
-                Spacer()
-                Text("사용 가능")
-                    .font(.caption2.bold())
-                    .foregroundStyle(AppPalette.accent)
+                    .font(.system(size: 23, weight: .bold))
+                    .foregroundStyle(.white)
             }
-            Text(coupon.title)
-                .font(.headline)
-                .lineLimit(2)
-                .frame(height: 42, alignment: .topLeading)
-            Text(coupon.discountType == .percentage ? "최대 \(coupon.discountValue)% 할인" : "\(coupon.discountValue.formatted())원 할인")
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(AppPalette.ink)
-            Text(coupon.minimumOrderAmount == 0 ? "최소 주문금액 없음" : "\(coupon.minimumOrderAmount.formatted())원 이상")
-                .font(.caption)
-                .foregroundStyle(AppPalette.ink.opacity(0.55))
+            .frame(width: 54, height: 64)
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text(coupon.title)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(AppPalette.ink)
+                    .lineLimit(1)
+                Text("\(coupon.brand) · \(coupon.expiresAt.formatted(date: .numeric, time: .omitted))까지")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(AppPalette.muted)
+                Text(coupon.discountType == .percentage ? "최대 \(coupon.discountValue)% 할인" : "\(coupon.discountValue.formatted())원 할인")
+                    .font(.system(size: 25, weight: .bold))
+                    .foregroundStyle(AppPalette.ink)
+            }
+            Spacer(minLength: 6)
+            Image(systemName: "ellipsis")
+                .font(.system(size: 22, weight: .bold))
+                .rotationEffect(.degrees(90))
+                .foregroundStyle(AppPalette.muted)
         }
-        .padding(17)
-        .frame(width: 208, height: 190, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 25, style: .continuous).stroke(.white.opacity(0.78), lineWidth: 1) }
-        .shadow(color: AppPalette.ink.opacity(0.05), radius: 12, y: 6)
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(AppPalette.border, lineWidth: 1) }
     }
 
     private var priceCard: some View {
-        GlassCard {
+        WooriCard {
             HStack(alignment: .center, spacing: 14) {
                 Image(systemName: "wonsign.circle.fill")
                     .font(.title)
                     .foregroundStyle(AppPalette.accent)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("장바구니 결제금액")
-                        .font(.headline)
+                        .font(.system(size: 19, weight: .bold))
                     Text("단품 쿠폰은 상품 기준가로 별도 계산해요")
                         .font(.caption)
-                        .foregroundStyle(AppPalette.ink.opacity(0.56))
+                        .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
                 HStack(spacing: 3) {
@@ -650,7 +613,7 @@ struct ContentView: View {
                         .multilineTextAlignment(.trailing)
                         .font(.headline.weight(.bold))
                         .frame(width: 78)
-                    Text("원").font(.caption).foregroundStyle(AppPalette.ink.opacity(0.55))
+                    Text("원").font(.caption).foregroundStyle(AppPalette.muted)
                 }
             }
         }
@@ -677,7 +640,8 @@ struct ContentView: View {
                 .foregroundStyle(AppPalette.ink.opacity(0.42))
         }
         .padding(17)
-        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(AppPalette.border, lineWidth: 1) }
         }
         .buttonStyle(.plain)
         .accessibilityHint("사용 완료 쿠폰 기록을 엽니다")
@@ -1426,14 +1390,23 @@ private struct CardCameraPicker: UIViewControllerRepresentable {
 
 private struct LiquidBackground: View {
     var body: some View {
-        LinearGradient(colors: [AppPalette.canvas, .white], startPoint: .top, endPoint: .bottom)
-            .overlay(alignment: .topTrailing) {
-                Circle().fill(AppPalette.accent.opacity(0.27)).frame(width: 410).blur(radius: 96).offset(x: 135, y: -158)
-            }
-            .overlay(alignment: .bottomLeading) {
-                Circle().fill(AppPalette.aurora.opacity(0.16)).frame(width: 330).blur(radius: 92).offset(x: -165, y: 150)
-            }
+        LinearGradient(
+            colors: [AppPalette.topCanvas, AppPalette.canvas],
+            startPoint: .top,
+            endPoint: .bottom
+        )
             .ignoresSafeArea()
+    }
+}
+
+private struct WooriCard<Content: View>: View {
+    @ViewBuilder let content: Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) { content }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(AppPalette.border, lineWidth: 1) }
     }
 }
 
@@ -1446,6 +1419,16 @@ private struct GlassCard<Content: View>: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .overlay { RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.white.opacity(0.72), lineWidth: 1) }
             .shadow(color: AppPalette.ink.opacity(0.06), radius: 12, y: 6)
+    }
+}
+
+private struct WooriPrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(AppPalette.accent)
+            .background(AppPalette.blueChip, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AppPalette.accent.opacity(0.10), lineWidth: 1) }
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
@@ -1472,9 +1455,14 @@ private struct PrimaryGlassButtonStyle: ButtonStyle {
 }
 
 enum AppPalette {
-    static let ink = Color(red: 0.055, green: 0.10, blue: 0.22)
-    static let accent = Color(red: 0.00, green: 0.68, blue: 0.67)
-    static let aurora = Color(red: 0.32, green: 0.42, blue: 0.98)
-    static let canvas = Color(red: 0.93, green: 0.98, blue: 1.00)
-    static let warning = Color(red: 0.94, green: 0.35, blue: 0.22)
+    static let ink = Color(red: 0.10, green: 0.13, blue: 0.16)
+    static let muted = Color(red: 0.52, green: 0.57, blue: 0.63)
+    static let accent = Color(red: 0.02, green: 0.48, blue: 0.94)
+    static let aurora = Color(red: 0.13, green: 0.64, blue: 0.96)
+    static let couponBlue = Color(red: 0.10, green: 0.68, blue: 0.94)
+    static let blueChip = Color(red: 0.89, green: 0.96, blue: 1.00)
+    static let topCanvas = Color(red: 0.96, green: 0.99, blue: 1.00)
+    static let canvas = Color(red: 0.93, green: 0.95, blue: 0.97)
+    static let border = Color(red: 0.87, green: 0.90, blue: 0.93)
+    static let warning = Color(red: 0.95, green: 0.19, blue: 0.25)
 }

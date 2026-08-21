@@ -204,14 +204,8 @@ private struct RecommendationLiquidBackground: View {
     let accent: Color
 
     var body: some View {
-        LinearGradient(colors: [AppPalette.canvas, .white], startPoint: .top, endPoint: .bottom)
-        .overlay(alignment: .topTrailing) {
-            Circle().fill(accent.opacity(0.27)).frame(width: 360).blur(radius: 92).offset(x: 120, y: -135)
-        }
-        .overlay(alignment: .bottomLeading) {
-            Circle().fill(AppPalette.aurora.opacity(0.15)).frame(width: 280).blur(radius: 82).offset(x: -130, y: 120)
-        }
-        .ignoresSafeArea()
+        LinearGradient(colors: [AppPalette.topCanvas, AppPalette.canvas], startPoint: .top, endPoint: .bottom)
+            .ignoresSafeArea()
     }
 }
 
@@ -226,23 +220,12 @@ private struct RecommendationGlassSurface<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.regularMaterial)
-                    .overlay {
-                        LinearGradient(
-                            colors: [.white.opacity(0.62), tint.opacity(0.16), AppPalette.aurora.opacity(0.06)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    }
+                    .fill(.white)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(
-                        LinearGradient(colors: [.white.opacity(0.82), tint.opacity(0.14)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: 1
-                    )
+                    .stroke(AppPalette.border, lineWidth: 1)
             }
-            .shadow(color: AppPalette.ink.opacity(0.06), radius: 14, y: 7)
     }
 }
 
