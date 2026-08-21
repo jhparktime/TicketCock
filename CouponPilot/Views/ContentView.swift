@@ -215,7 +215,7 @@ struct ContentView: View {
         .padding(7)
         .background(.white, in: Capsule())
         .overlay { Capsule().stroke(AppPalette.border, lineWidth: 1) }
-        .shadow(color: AppPalette.ink.opacity(0.10), radius: 18, y: 8)
+        .shadow(color: AppPalette.ink.opacity(0.08), radius: 14, y: 6)
     }
 
     private func dockButton(tab: String, title: String, icon: String) -> some View {
@@ -228,9 +228,9 @@ struct ContentView: View {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(size: 16, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 11, weight: .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
             }
@@ -278,7 +278,7 @@ struct ContentView: View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("김우리님")
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .underline()
                 Text(syncStatusTitle)
@@ -304,7 +304,7 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .font(.system(size: 24, weight: .medium))
+            .font(.system(size: 22, weight: .medium))
             .foregroundStyle(AppPalette.ink)
         }
         .padding(.top, 8)
@@ -408,12 +408,12 @@ struct ContentView: View {
             if let store = appState.currentStore {
                 let matchingCoupons = eligibleCoupons(for: store)
                 Text("쿠폰콕이 \(store.name)의\n혜택을 비교해드릴게요")
-                    .font(.system(size: 30, weight: .bold))
-                    .lineSpacing(2)
+                    .font(.system(size: 27, weight: .bold))
+                    .lineSpacing(1)
                     .foregroundStyle(AppPalette.ink)
 
                 Text(matchingCoupons.isEmpty ? "이 매장에 맞는 등록 쿠폰이 없어요" : "사용 가능한 쿠폰 \(matchingCoupons.count)장과 \(appState.profile.carrier) 멤버십을 함께 확인합니다.")
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -428,7 +428,7 @@ struct ContentView: View {
                         }
                         Text(appState.isLoadingRecommendation ? "혜택 계산 중" : matchingCoupons.isEmpty ? "매칭 쿠폰이 없어요" : "AI 조합 추천받기")
                     }
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(size: 16, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
                 }
@@ -442,12 +442,12 @@ struct ContentView: View {
                 }
             } else {
                 Text(AppState.isSubmissionSimulation ? "투썸플레이스에서\n쿠폰을 비교해 볼까요?" : "매장에 들어가면\n혜택을 알려드릴게요")
-                    .font(.system(size: 30, weight: .bold))
-                    .lineSpacing(2)
+                    .font(.system(size: 27, weight: .bold))
+                    .lineSpacing(1)
                     .foregroundStyle(AppPalette.ink)
 
                 Text(AppState.isSubmissionSimulation ? "등록 쿠폰 2장을 Calculator Tool로 비교합니다." : appState.storeDirectoryState.message)
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
 
             if !AppState.isSubmissionSimulation {
@@ -467,7 +467,7 @@ struct ContentView: View {
                                 : "위치 개인화 동의하고 시작",
                             systemImage: "location.fill"
                         )
-                            .font(.system(size: 17, weight: .bold))
+                            .font(.system(size: 16, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
                     }
@@ -488,7 +488,7 @@ struct ContentView: View {
                     Task { await handleSubmissionStoreEntry() }
                 } label: {
                     Label("투썸플레이스 수원시청점 도착", systemImage: "location.fill.viewfinder")
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.system(size: 16, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
                 }
@@ -506,7 +506,7 @@ struct ContentView: View {
     private func heroMetric(value: String, label: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(value)
-                .font(.system(size: 21, weight: .bold))
+                .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(AppPalette.ink)
             Text(label)
                 .font(.footnote.weight(.semibold))
@@ -519,7 +519,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("바로 쓸 쿠폰")
-                    .font(.system(size: 23, weight: .bold))
+                    .font(.system(size: 20, weight: .bold))
                 Spacer()
                 Button {
                     showCouponImporter = true
@@ -620,14 +620,14 @@ struct ContentView: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(coupon.title)
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                 Text("\(coupon.brand) · \(coupon.expiresAt.formatted(date: .numeric, time: .omitted))까지")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 Text(coupon.discountType == .percentage ? "최대 \(coupon.discountValue)% 할인" : "\(coupon.discountValue.formatted())원 할인")
-                    .font(.system(size: 21, weight: .bold))
+                    .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
             }
             Spacer(minLength: 6)
@@ -636,10 +636,10 @@ struct ContentView: View {
                 .rotationEffect(.degrees(90))
                 .foregroundStyle(AppPalette.muted)
         }
-        .padding(18)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(AppPalette.border, lineWidth: 1) }
+        .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AppPalette.border, lineWidth: 1) }
     }
 
     private var priceCard: some View {
@@ -1454,10 +1454,10 @@ private struct WooriCard<Content: View>: View {
     @ViewBuilder let content: Content
     var body: some View {
         VStack(alignment: .leading, spacing: 10) { content }
-            .padding(18)
+            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay { RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(AppPalette.border, lineWidth: 1) }
+            .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AppPalette.border, lineWidth: 1) }
     }
 }
 
@@ -1476,9 +1476,9 @@ private struct GlassCard<Content: View>: View {
 private struct WooriPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(AppPalette.accent)
-            .background(AppPalette.blueChip, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AppPalette.accent.opacity(0.10), lineWidth: 1) }
+            .foregroundStyle(.white)
+            .background(AppPalette.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(AppPalette.accent.opacity(0.14), lineWidth: 1) }
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
@@ -1506,14 +1506,14 @@ private struct PrimaryGlassButtonStyle: ButtonStyle {
 }
 
 enum AppPalette {
-    static let ink = Color(red: 0.10, green: 0.13, blue: 0.16)
-    static let muted = Color(red: 0.52, green: 0.57, blue: 0.63)
-    static let accent = Color(red: 0.02, green: 0.48, blue: 0.94)
-    static let aurora = Color(red: 0.13, green: 0.64, blue: 0.96)
-    static let couponBlue = Color(red: 0.10, green: 0.68, blue: 0.94)
-    static let blueChip = Color(red: 0.89, green: 0.96, blue: 1.00)
-    static let topCanvas = Color(red: 0.96, green: 0.99, blue: 1.00)
-    static let canvas = Color(red: 0.93, green: 0.95, blue: 0.97)
-    static let border = Color(red: 0.87, green: 0.90, blue: 0.93)
+    static let ink = Color(red: 0.12, green: 0.14, blue: 0.16)
+    static let muted = Color(red: 0.48, green: 0.51, blue: 0.55)
+    static let accent = Color(red: 0.00, green: 0.78, blue: 0.49)
+    static let aurora = Color(red: 0.17, green: 0.80, blue: 0.64)
+    static let couponBlue = Color(red: 0.07, green: 0.73, blue: 0.56)
+    static let blueChip = Color(red: 0.89, green: 0.98, blue: 0.94)
+    static let topCanvas = Color(red: 0.98, green: 0.99, blue: 0.99)
+    static let canvas = Color(red: 0.95, green: 0.97, blue: 0.98)
+    static let border = Color(red: 0.89, green: 0.91, blue: 0.93)
     static let warning = Color(red: 0.95, green: 0.19, blue: 0.25)
 }
