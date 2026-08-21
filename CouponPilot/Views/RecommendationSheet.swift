@@ -204,9 +204,12 @@ private struct RecommendationLiquidBackground: View {
     let accent: Color
 
     var body: some View {
-        LinearGradient(colors: [AppPalette.canvas, AppPalette.canvas.opacity(0.90)], startPoint: .top, endPoint: .bottom)
+        LinearGradient(colors: [AppPalette.canvas, .white], startPoint: .top, endPoint: .bottom)
         .overlay(alignment: .topTrailing) {
-            Circle().fill(accent.opacity(0.14)).frame(width: 340).blur(radius: 90).offset(x: 115, y: -130)
+            Circle().fill(accent.opacity(0.27)).frame(width: 360).blur(radius: 92).offset(x: 120, y: -135)
+        }
+        .overlay(alignment: .bottomLeading) {
+            Circle().fill(AppPalette.aurora.opacity(0.15)).frame(width: 280).blur(radius: 82).offset(x: -130, y: 120)
         }
         .ignoresSafeArea()
     }
@@ -226,7 +229,7 @@ private struct RecommendationGlassSurface<Content: View>: View {
                     .fill(.regularMaterial)
                     .overlay {
                         LinearGradient(
-                            colors: [.white.opacity(0.48), tint.opacity(0.08), .white.opacity(0.04)],
+                            colors: [.white.opacity(0.62), tint.opacity(0.16), AppPalette.aurora.opacity(0.06)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

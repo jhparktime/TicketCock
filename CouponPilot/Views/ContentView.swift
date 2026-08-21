@@ -490,11 +490,15 @@ struct ContentView: View {
         }
         .padding(21)
         .background(
-            LinearGradient(colors: [AppPalette.accent.opacity(0.30), AppPalette.accent.opacity(0.14)], startPoint: .topLeading, endPoint: .bottomTrailing),
+            LinearGradient(
+                colors: [AppPalette.accent.opacity(0.78), AppPalette.aurora.opacity(0.54), AppPalette.accent.opacity(0.32)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
             in: RoundedRectangle(cornerRadius: 32, style: .continuous)
         )
-        .overlay { RoundedRectangle(cornerRadius: 32, style: .continuous).stroke(.white.opacity(0.34), lineWidth: 1) }
-        .shadow(color: AppPalette.ink.opacity(0.12), radius: 18, y: 9)
+        .overlay { RoundedRectangle(cornerRadius: 32, style: .continuous).stroke(.white.opacity(0.58), lineWidth: 1) }
+        .shadow(color: AppPalette.aurora.opacity(0.20), radius: 22, y: 10)
     }
 
     private func heroMetric(value: String, label: String) -> some View {
@@ -1422,9 +1426,12 @@ private struct CardCameraPicker: UIViewControllerRepresentable {
 
 private struct LiquidBackground: View {
     var body: some View {
-        LinearGradient(colors: [AppPalette.canvas, AppPalette.canvas.opacity(0.90)], startPoint: .top, endPoint: .bottom)
+        LinearGradient(colors: [AppPalette.canvas, .white], startPoint: .top, endPoint: .bottom)
             .overlay(alignment: .topTrailing) {
-                Circle().fill(AppPalette.accent.opacity(0.13)).frame(width: 390).blur(radius: 100).offset(x: 130, y: -150)
+                Circle().fill(AppPalette.accent.opacity(0.27)).frame(width: 410).blur(radius: 96).offset(x: 135, y: -158)
+            }
+            .overlay(alignment: .bottomLeading) {
+                Circle().fill(AppPalette.aurora.opacity(0.16)).frame(width: 330).blur(radius: 92).offset(x: -165, y: 150)
             }
             .ignoresSafeArea()
     }
@@ -1446,16 +1453,28 @@ private struct PrimaryGlassButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(AppPalette.ink)
-            .background(.ultraThinMaterial, in: Capsule())
+            .background {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        LinearGradient(
+                            colors: [.white.opacity(0.68), AppPalette.accent.opacity(0.18)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .clipShape(Capsule())
+                    }
+            }
             .overlay { Capsule().stroke(.white.opacity(configuration.isPressed ? 0.48 : 0.84), lineWidth: 1) }
-            .shadow(color: AppPalette.ink.opacity(0.07), radius: 10, y: 5)
+            .shadow(color: AppPalette.accent.opacity(0.16), radius: 12, y: 6)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }
 
 enum AppPalette {
     static let ink = Color(red: 0.055, green: 0.10, blue: 0.22)
-    static let accent = Color(red: 0.02, green: 0.55, blue: 0.57)
-    static let canvas = Color(red: 0.94, green: 0.98, blue: 0.98)
-    static let warning = Color(red: 0.76, green: 0.43, blue: 0.16)
+    static let accent = Color(red: 0.00, green: 0.68, blue: 0.67)
+    static let aurora = Color(red: 0.32, green: 0.42, blue: 0.98)
+    static let canvas = Color(red: 0.93, green: 0.98, blue: 1.00)
+    static let warning = Color(red: 0.94, green: 0.35, blue: 0.22)
 }
