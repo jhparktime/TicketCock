@@ -258,7 +258,6 @@ struct ContentView: View {
                     VStack(spacing: 18) {
                         topBar
                         nearbyStoreHero
-                        locationPill
                         if !expiringCoupons.isEmpty { expiringCouponSection }
                         quickCouponSection
                         priceCard
@@ -407,15 +406,21 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 20) {
             if let store = appState.currentStore {
                 let matchingCoupons = eligibleCoupons(for: store)
-                Text("쿠폰콕이 \(store.name)의\n혜택을 비교해드릴게요")
-                    .font(.system(size: 27, weight: .bold))
-                    .lineSpacing(1)
-                    .foregroundStyle(AppPalette.ink)
-
-                Text(matchingCoupons.isEmpty ? "이 매장에 맞는 등록 쿠폰이 없어요" : "사용 가능한 쿠폰 \(matchingCoupons.count)장과 \(appState.profile.carrier) 멤버십을 함께 확인합니다.")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(AppPalette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 7) {
+                    Label("가장 가까운 매장", systemImage: "location.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(AppPalette.accent)
+                    Text(store.name)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(AppPalette.ink)
+                    Text(matchingCoupons.isEmpty ? "이 매장에서 쓸 수 있는 혜택을 확인해 드릴게요" : "이 매장에서 쓸 수 있는 쿠폰과 멤버십 혜택을 찾아드릴게요")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(18)
+                .background(.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(AppPalette.border, lineWidth: 1) }
 
                 Button {
                     Task { await requestRecommendation(for: store) }
@@ -426,7 +431,7 @@ struct ContentView: View {
                         } else {
                             Image(systemName: "sparkles.rectangle.stack.fill")
                         }
-                        Text(appState.isLoadingRecommendation ? "혜택 계산 중" : matchingCoupons.isEmpty ? "매칭 쿠폰이 없어요" : "AI 조합 추천받기")
+                        Text(appState.isLoadingRecommendation ? "혜택 계산 중" : matchingCoupons.isEmpty ? "매칭 쿠폰이 없어요" : storeRecommendationButtonTitle(for: store))
                     }
                     .font(.system(size: 16, weight: .semibold))
                     .frame(maxWidth: .infinity)
@@ -438,7 +443,7 @@ struct ContentView: View {
                 HStack(spacing: 12) {
                     heroMetric(value: appState.recommendation?.storeName == store.name ? "\(appState.recommendation!.recommendedOption.savings.formatted())원" : "\(matchingCoupons.count)장", label: appState.recommendation?.storeName == store.name ? "계산된 절약" : "매칭 쿠폰")
                     Divider().overlay(AppPalette.border)
-                    heroMetric(value: appState.recommendation?.storeName == store.name ? "\(appState.recommendation!.recommendedOption.finalPrice.formatted())원" : "\(store.radiusMeters.formatted(.number.precision(.fractionLength(0))))m", label: appState.recommendation?.storeName == store.name ? "예상 결제" : "알림 반경")
+                    heroMetric(value: appState.recommendation?.storeName == store.name ? "\(appState.recommendation!.recommendedOption.finalPrice.formatted())원" : "\(store.radiusMeters.formatted(.number.precision(.fractionLength(0))))m", label: appState.recommendation?.storeName == store.name ? "예상 결제" : "매장 거리")
                 }
             } else {
                 Text(AppState.isSubmissionSimulation ? "투썸플레이스에서\n쿠폰을 비교해 볼까요?" : "매장에 들어가면\n혜택을 알려드릴게요")
@@ -489,13 +494,13 @@ struct ContentView: View {
                 Button {
                     Task { await handleSubmissionStoreEntry() }
                 } label: {
-                    Label("투썸플레이스 수원시청점 도착", systemImage: "location.fill.viewfinder")
+                    Label("투썸플레이스 수원시청점 혜택 보기", systemImage: "mappin.and.ellipse")
                         .font(.system(size: 16, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
                 }
                 .buttonStyle(WooriPrimaryButtonStyle())
-                .accessibilityHint("매장 진입 알림과 쿠폰 추천 흐름을 확인합니다")
+                .accessibilityHint("가까운 투썸플레이스 매장의 쿠폰 혜택을 확인합니다")
             }
 
         }
@@ -503,6 +508,11 @@ struct ContentView: View {
         .padding(.horizontal, 8)
         .padding(.top, 20)
         .padding(.bottom, 6)
+    }
+
+    private func storeRecommendationButtonTitle(for store: Store) -> String {
+        if store.name.contains("투썸") { return "투썸 혜택 추천받기" }
+        return "\(store.name) 혜택 추천받기"
     }
 
     private func heroMetric(value: String, label: String) -> some View {
