@@ -31,6 +31,7 @@ struct ContentView: View {
     @State private var showCardImporter = false
     @State private var appleSignInNonce = ""
     @State private var accountLoginMessage: String?
+    @Namespace private var dockSelectionNamespace
 
     var body: some View {
         if appState.privacyConsent.permitsService {
@@ -46,34 +47,24 @@ struct ContentView: View {
     }
 
     private var mainContent: some View {
-        TabView(selection: $selectedTab) {
-            NavigationStack {
-                homeScreen
-            }
-            .tag("home")
-            .tabItem { Label("홈", systemImage: "house.fill") }
-
-            NavigationStack {
-                couponLibrary
-            }
-            .tag("coupons")
-            .tabItem { Label("쿠폰", systemImage: "ticket.fill") }
-
-            NavigationStack {
-                historyScreen
-            }
-            .tag("history")
-            .tabItem { Label("기록", systemImage: "clock.fill") }
-
-            NavigationStack {
-                profileScreen
-            }
-            .tag("profile")
-            .tabItem { Label("내 정보", systemImage: "person.fill") }
+        ZStack {
+            selectedTabContent
+                .id(selectedTab)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .opacity
+                ))
+                .safeAreaInset(edge: .bottom) {
+                    Color.clear.frame(height: 88)
+                }
         }
         .tint(AppPalette.accent)
-        .toolbarBackground(.visible, for: .tabBar)
-        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .animation(.spring(response: 0.42, dampingFraction: 0.88), value: selectedTab)
+        .overlay(alignment: .bottom) {
+            floatingTabDock
+                .padding(.horizontal, 18)
+                .padding(.bottom, 12)
+        }
         .overlay(alignment: .bottom) {
             VStack(spacing: 10) {
                 if let coupon = appState.recentlyUsedCoupon {
@@ -121,7 +112,7 @@ struct ContentView: View {
             }
             .shadow(color: .black.opacity(0.15), radius: 18, y: 8)
             .padding(.horizontal, 16)
-            .padding(.bottom, 66)
+            .padding(.bottom, 92)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
         .animation(.snappy, value: appState.recentlyUsedCoupon?.id)
@@ -200,6 +191,64 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private var selectedTabContent: some View {
+        switch selectedTab {
+        case "coupons":
+            NavigationStack { couponLibrary }
+        case "history":
+            NavigationStack { historyScreen }
+        case "profile":
+            NavigationStack { profileScreen }
+        default:
+            NavigationStack { homeScreen }
+        }
+    }
+
+    private var floatingTabDock: some View {
+        HStack(spacing: 6) {
+            dockButton(tab: "home", title: "홈", icon: "house.fill")
+            dockButton(tab: "coupons", title: "쿠폰", icon: "ticket.fill")
+            dockButton(tab: "history", title: "기록", icon: "clock.fill")
+            dockButton(tab: "profile", title: "내 정보", icon: "person.fill")
+        }
+        .padding(7)
+        .background(.white, in: Capsule())
+        .overlay { Capsule().stroke(AppPalette.border, lineWidth: 1) }
+        .shadow(color: AppPalette.ink.opacity(0.10), radius: 18, y: 8)
+    }
+
+    private func dockButton(tab: String, title: String, icon: String) -> some View {
+        let isSelected = selectedTab == tab
+        return Button {
+            guard selectedTab != tab else { return }
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
+                selectedTab = tab
+            }
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .bold))
+                Text(title)
+                    .font(.system(size: 11, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .foregroundStyle(isSelected ? AppPalette.accent : AppPalette.muted)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background {
+                if isSelected {
+                    Capsule()
+                        .fill(AppPalette.blueChip)
+                        .matchedGeometryEffect(id: "dock-selection", in: dockSelectionNamespace)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
+
     private var homeScreen: some View {
         GeometryReader { proxy in
             ZStack {
@@ -217,7 +266,7 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 18)
                     .padding(.top, 10)
-                    .padding(.bottom, 118)
+                    .padding(.bottom, 24)
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -571,14 +620,14 @@ struct ContentView: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(coupon.title)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                 Text("\(coupon.brand) · \(coupon.expiresAt.formatted(date: .numeric, time: .omitted))까지")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 Text(coupon.discountType == .percentage ? "최대 \(coupon.discountValue)% 할인" : "\(coupon.discountValue.formatted())원 할인")
-                    .font(.system(size: 25, weight: .bold))
+                    .font(.system(size: 21, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
             }
             Spacer(minLength: 6)
@@ -621,7 +670,9 @@ struct ContentView: View {
 
     private var usedCouponSection: some View {
         Button {
-            selectedTab = "history"
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
+                selectedTab = "history"
+            }
         } label: {
         HStack(spacing: 13) {
             Image(systemName: "checkmark.seal.fill")
