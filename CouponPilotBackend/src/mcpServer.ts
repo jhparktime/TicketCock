@@ -5,10 +5,11 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { searchOfficialBenefits, type CalculatorBenefitRule } from "./benefitRag.js";
-import { calculateOptions, type RecommendationInput } from "./calculator.js";
+import { searchOfficialBenefits } from "./benefitRag.js";
+import { calculateOptions, matchingBenefitRules, type RecommendationInput } from "./calculator.js";
 import { initializeObservability, traceHttpRequest, traceOperation } from "./observability.js";
 import { fetchNearbySuwonStores, SUWON_STORE_DATA_SOURCE } from "./server.js";
+import { verifyStoreWithExternalMaps } from "./externalMapsMcp.js";
 
 const MAX_MONEY_WON = 1_000_000;
 
@@ -130,10 +131,41 @@ const calculatedOptionOutputSchema = z.object({
   badges: z.array(z.string().min(1)).max(10)
 }).strict();
 
-function toolResult(value: Record<string, unknown>) {
+/** Every Tool result is parsed again at the producer boundary before an Agent can consume it. */
+const storeSearchOutputSchema = z.object({
+  region: z.literal("수원시"),
+  source: z.literal("data.go.kr"),
+  sourceMetadata: storeSourceMetadataSchema,
+  stores: z.array(storeOutputSchema).max(500)
+}).strict();
+
+const benefitSearchOutputSchema = z.object({
+  matches: z.array(benefitMatchOutputSchema).max(8),
+  policy: z.string().min(1)
+}).strict();
+
+const calculationOutputSchema = z.object({
+  recommendedOption: calculatedOptionOutputSchema.nullable(),
+  alternatives: z.array(calculatedOptionOutputSchema).max(129),
+  policy: z.string().min(1)
+}).strict();
+
+const externalPlaceVerificationOutputSchema = z.object({
+  provider: z.enum(["google-maps-mcp", "kakao-local-api", "unavailable"]),
+  status: z.enum(["verified", "fallback_verified", "not_configured", "unavailable"]),
+  query: z.string().min(1).max(200),
+  coarseLatitude: z.number().min(37.18).max(37.34),
+  coarseLongitude: z.number().min(126.90).max(127.15),
+  attributionURLs: z.array(z.string().url()).max(5),
+  candidateCount: z.number().int().min(0).max(20),
+  policy: z.string().min(1)
+}).strict();
+
+function toolResult<T>(schema: z.ZodType<T>, value: unknown) {
+  const parsed = schema.parse(value);
   return {
-    content: [{ type: "text" as const, text: JSON.stringify(value) }],
-    structuredContent: value
+    content: [{ type: "text" as const, text: JSON.stringify(parsed) }],
+    structuredContent: parsed as Record<string, unknown>
   };
 }
 
@@ -149,24 +181,38 @@ function createCouponCockMcpServer() {
       radiusMeters: z.number().int().min(100).max(1_500).default(1_000),
       query: z.string().trim().min(1).max(100).optional()
     }).strict(),
-    outputSchema: z.object({
-      region: z.literal("수원시"),
-      source: z.literal("data.go.kr"),
-      sourceMetadata: storeSourceMetadataSchema,
-      stores: z.array(storeOutputSchema).max(500)
-    }).strict(),
+    outputSchema: storeSearchOutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true }
   }, async ({ latitude, longitude, radiusMeters, query }) => {
     const stores = await traceOperation("mcp.search_nearby_stores", {
       "couponcok.region": "수원시",
       "couponcok.radius_m": radiusMeters
     }, () => fetchNearbySuwonStores(latitude, longitude, radiusMeters, query));
-    return toolResult({
+    return toolResult(storeSearchOutputSchema, {
       region: "수원시",
       source: SUWON_STORE_DATA_SOURCE.id,
       sourceMetadata: { ...SUWON_STORE_DATA_SOURCE, retrievedAt: new Date().toISOString() },
       stores
     });
+  });
+
+  server.registerTool("verify_store_with_external_maps", {
+    title: "외부 지도 MCP 매장 검증",
+    description: "Google Maps 공식 MCP로 매장명을 보조 검증하고, 응답 불가 시 카카오 공식 Local REST API를 fallback으로 사용합니다. 정밀 GPS·쿠폰·바코드는 외부로 전송하지 않습니다.",
+    inputSchema: z.object({
+      storeName: z.string().trim().min(1).max(150),
+      latitude: z.number().min(37.18).max(37.34),
+      longitude: z.number().min(126.90).max(127.15),
+      radiusMeters: z.number().int().min(100).max(1_500).default(1_000)
+    }).strict(),
+    outputSchema: externalPlaceVerificationOutputSchema,
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true }
+  }, async (input) => {
+    const result = await traceOperation("mcp.verify_store_with_external_maps", {
+      "couponcok.region": "수원시",
+      "couponcok.maps.precision": "0.01-degree-grid"
+    }, () => verifyStoreWithExternalMaps(input));
+    return toolResult(externalPlaceVerificationOutputSchema, result);
   });
 
   server.registerTool("retrieve_carrier_benefits", {
@@ -179,17 +225,14 @@ function createCouponCockMcpServer() {
       storeName: z.string().trim().min(1).max(150),
       limit: z.number().int().min(1).max(8).default(4)
     }).strict(),
-    outputSchema: z.object({
-      matches: z.array(benefitMatchOutputSchema).max(8),
-      policy: z.string().min(1)
-    }).strict(),
+    outputSchema: benefitSearchOutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
   }, async ({ carrier, membershipGrade, cardProducts, storeName, limit }) => {
     const chunks = await traceOperation("mcp.retrieve_carrier_benefits", {
       "couponcok.carrier": carrier,
       "couponcok.store": storeName
     }, () => searchOfficialBenefits([carrier, membershipGrade ?? "", ...(cardProducts ?? []), storeName].join(" "), limit));
-    return toolResult({
+    return toolResult(benefitSearchOutputSchema, {
       matches: chunks.map(({ embedding, ...chunk }) => chunk),
       policy: "공식 문서에 구조화된 rule이 있는 혜택만 Calculator 입력으로 사용할 수 있습니다."
     });
@@ -203,26 +246,42 @@ function createCouponCockMcpServer() {
       storeName: z.string().trim().min(1).max(150),
       expectedPrice: z.number().int().min(1).max(MAX_MONEY_WON),
       profile: profileSchema,
-      coupons: z.array(couponSchema).min(1).max(100),
-      benefitRules: z.array(benefitRuleSchema).max(30).default([])
+      coupons: z.array(couponSchema).min(1).max(100)
     }).strict(),
-    outputSchema: z.object({
-      recommendedOption: calculatedOptionOutputSchema.nullable(),
-      alternatives: z.array(calculatedOptionOutputSchema).max(129),
-      policy: z.string().min(1)
-    }).strict(),
+    outputSchema: calculationOutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
-  }, async ({ benefitRules, ...recommendation }) => {
+  }, async (recommendation) => {
     const input = recommendation as RecommendationInput;
+    // The Agent never supplies monetary benefit rules. Resolve a fresh set from the active,
+    // reviewed official RAG index inside this server boundary, then filter it against the
+    // authenticated user's declared carrier/card product and the current store.
+    const benefitQuery = [
+      input.profile.carrier,
+      input.profile.membershipGrade ?? "",
+      ...(input.profile.cards?.flatMap((card) => [card.productId, card.productName]) ?? []),
+      input.storeName ?? input.storeId
+    ].filter(Boolean).join(" ");
+    let officialChunks: Awaited<ReturnType<typeof searchOfficialBenefits>> = [];
+    try {
+      officialChunks = await traceOperation("mcp.resolve_approved_benefit_rules", {
+        "couponcok.store": input.storeName ?? input.storeId,
+        "couponcok.carrier": input.profile.carrier
+      }, () => searchOfficialBenefits(benefitQuery, 8));
+    } catch (error) {
+      // A temporary official-index outage must not make the Agent invent a rule or block a
+      // deterministic coupon-only comparison. The lack of a benefit rule is fail-closed.
+      console.error("Approved benefit lookup unavailable for Calculator MCP", error);
+    }
+    const benefitRules = matchingBenefitRules(input.profile, input.storeName ?? input.storeId, officialChunks);
     const options = await traceOperation("mcp.calculate_best_discount", {
       "couponcok.store": input.storeName ?? input.storeId,
       "couponcok.coupon_count": input.coupons.length,
       "couponcok.benefit_rule_count": benefitRules.length
-    }, async () => calculateOptions(input, benefitRules as CalculatorBenefitRule[]));
-    return toolResult({
+    }, async () => calculateOptions(input, benefitRules));
+    return toolResult(calculationOutputSchema, {
       recommendedOption: options[0] ?? null,
       alternatives: options.slice(1),
-      policy: "LLM은 이 계산 결과의 금액·순위·중복 가능 여부를 변경할 수 없습니다."
+      policy: "할인 규칙은 활성·승인된 공식 RAG 문서에서 서버가 다시 조회합니다. LLM은 금액·순위·중복 가능 여부를 변경하거나 규칙을 주입할 수 없습니다."
     });
   });
 
@@ -260,7 +319,7 @@ export function createMcpApp() {
       await server.close();
     }
   });
-  app.get("/health", (_req, res) => res.json({ ok: true, service: "couponcok-mcp", tools: 3 }));
+  app.get("/health", (_req, res) => res.json({ ok: true, service: "couponcok-mcp", tools: 4 }));
   app.all("/mcp", (_req, res) => res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed" }, id: null }));
   return app;
 }

@@ -31,25 +31,20 @@ struct CouponPilotApp: App {
 
 @MainActor
 final class AppState: ObservableObject {
-    /// Debug builds retain fixtures for the bootcamp demonstration. Release/TestFlight builds
-    /// begin with an empty, clearly personal coupon wallet.
-    static let includesDemoFixtures: Bool = {
-        #if DEBUG
-        true
-        #else
-        false
-        #endif
-    }()
+    /// Submission runs are opt-in. A normal simulator, TestFlight, and App Store build always
+    /// starts with the user's own wallet and never loads this scenario.
+    static let isSubmissionSimulation = ProcessInfo.processInfo.arguments.contains("-CouponCokSubmission")
+        || ProcessInfo.processInfo.environment["COUPONCOK_SUBMISSION"] == "1"
 
     private struct NotificationRecommendationContext: Codable {
         let store: Store
         let recommendation: Recommendation
-        let isDemo: Bool
     }
 
     private static let notificationRecommendationContextKey = "notification-recommendation-context"
     private static let privacyConsentKey = "privacy-consent-v1"
     private static let pendingRestoredCouponIDsKey = "pending-restored-coupon-ids"
+    private static let pendingDeletedCouponIDsKey = "pending-deleted-coupon-ids"
     enum StoreDirectoryState: Equatable {
         case awaitingLocation, loading, live, empty, unavailable
 
@@ -62,10 +57,6 @@ final class AppState: ObservableObject {
             case .unavailable: "매장 목록을 불러오지 못했어요"
             }
         }
-    }
-
-    enum RecommendationOrigin: Equatable {
-        case live, demo
     }
 
     enum CloudSyncState: Equatable {
@@ -96,7 +87,6 @@ final class AppState: ObservableObject {
     @Published var recommendation: Recommendation?
     @Published var isLoadingRecommendation = false
     @Published var shouldShowRecommendation = false
-    @Published var recommendationOrigin: RecommendationOrigin = .live
     @Published private(set) var firebaseUserID: String?
     @Published private(set) var firebaseReady = false
     @Published private(set) var accountStatus: AccountStatus = .unavailable
@@ -113,21 +103,42 @@ final class AppState: ObservableObject {
     /// 사용 완료 직후 5초 동안 전역 실행 취소 배너에 노출할 원본 쿠폰입니다.
     @Published private(set) var recentlyUsedCoupon: Coupon?
     private var couponUndoExpirationTask: Task<Void, Never>?
+    @Published private(set) var recentlyDeletedCoupon: Coupon?
+    private var couponDeletionUndoExpirationTask: Task<Void, Never>?
     /// 오프라인 복원 후 원격 usedCoupons 문서가 삭제되기 전까지 유지하는 로컬 tombstone입니다.
     private var pendingRestoredCouponIDs: Set<String> = []
+    private var pendingDeletedCouponIDs: Set<String> = []
 
     init() {
+        if Self.isSubmissionSimulation {
+            privacyConsent = PrivacyConsent(
+                policyVersion: PrivacyConsent.currentPolicyVersion,
+                requiredProcessingAccepted: true,
+                personalizationAccepted: true,
+                locationPersonalizationAccepted: false,
+                acceptedAt: .now
+            )
+            pendingRestoredCouponIDs = []
+            pendingDeletedCouponIDs = []
+            usedCoupons = UsedCoupon.submissionHistory
+            recentlyUsedCoupon = nil
+            recentlyDeletedCoupon = nil
+            coupons = Coupon.submissionCoupons
+            profile = .submission
+            nearbyStores = [.suwonSubmissionTwosome]
+            storeDirectoryState = .live
+            return
+        }
+
         privacyConsent = Self.loadPrivacyConsent()
         pendingRestoredCouponIDs = Self.loadPendingRestoredCouponIDs()
-        let savedUsedCoupons = Self.loadSavedUsedCoupons()
-        let fixtureHistory = Self.includesDemoFixtures ? UsedCoupon.sampleHistory : []
-        let allUsedCoupons = Self.mergedUsedCoupons(fixtureHistory, savedUsedCoupons)
+        pendingDeletedCouponIDs = Self.loadPendingDeletedCouponIDs()
+        let allUsedCoupons = Self.loadSavedUsedCoupons()
         let usedIDs = Set(allUsedCoupons.map(\.id))
         let savedCoupons = Self.loadSavedCoupons().filter { !usedIDs.contains($0.id) }
         usedCoupons = allUsedCoupons
         recentlyUsedCoupon = nil
-        let fixtureCoupons = Self.includesDemoFixtures ? Coupon.demoCoupons : []
-        coupons = fixtureCoupons.filter { !usedIDs.contains($0.id) } + savedCoupons
+        coupons = savedCoupons
         profile = Self.loadSavedProfile()
 
         guard FirebaseApp.app() != nil else { return }
@@ -274,9 +285,10 @@ final class AppState: ObservableObject {
     }
 
     func saveImportedCoupon(_ coupon: Coupon) {
+        pendingDeletedCouponIDs.remove(coupon.id)
+        persistPendingDeletedCouponIDs()
         coupons.append(coupon)
-        let importedCoupons = coupons.filter { !Coupon.demoCoupons.contains($0) }
-        guard let encoded = try? JSONEncoder().encode(importedCoupons) else { return }
+        guard let encoded = try? JSONEncoder().encode(coupons) else { return }
         UserDefaults.standard.set(encoded, forKey: "saved-imported-coupons")
         scheduleCloudReconciliation()
     }
@@ -298,6 +310,48 @@ final class AppState: ObservableObject {
         armCouponUseUndo(for: coupon)
         persistCouponCollections()
         scheduleCloudReconciliation()
+    }
+
+    func updateCoupon(_ updatedCoupon: Coupon) {
+        guard let index = coupons.firstIndex(where: { $0.id == updatedCoupon.id }) else { return }
+        coupons[index] = updatedCoupon
+        coupons.sort { $0.expiresAt < $1.expiresAt }
+        persistCouponCollections()
+        scheduleCloudReconciliation(delayNanoseconds: 0)
+    }
+
+    /// Deletion remains reversible for five seconds; only then is the device-only image erased.
+    func deleteCoupon(_ coupon: Coupon) {
+        guard coupons.contains(coupon) else { return }
+        clearCouponUseUndo()
+        couponDeletionUndoExpirationTask?.cancel()
+        coupons.removeAll { $0.id == coupon.id }
+        pendingDeletedCouponIDs.insert(coupon.id)
+        persistPendingDeletedCouponIDs()
+        recentlyDeletedCoupon = coupon
+        persistCouponCollections()
+        scheduleCloudReconciliation(delayNanoseconds: 0)
+        couponDeletionUndoExpirationTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard !Task.isCancelled, let self, self.recentlyDeletedCoupon?.id == coupon.id else { return }
+            try? CouponImageStore.shared.delete(named: coupon.localImageFilename)
+            self.recentlyDeletedCoupon = nil
+            self.couponDeletionUndoExpirationTask = nil
+        }
+    }
+
+    func undoRecentCouponDeletion() -> Bool {
+        guard let coupon = recentlyDeletedCoupon else { return false }
+        couponDeletionUndoExpirationTask?.cancel()
+        couponDeletionUndoExpirationTask = nil
+        recentlyDeletedCoupon = nil
+        pendingDeletedCouponIDs.remove(coupon.id)
+        persistPendingDeletedCouponIDs()
+        if !coupons.contains(where: { $0.id == coupon.id }) { coupons.append(coupon) }
+        coupons.sort { $0.expiresAt < $1.expiresAt }
+        persistCouponCollections()
+        scheduleCloudReconciliation(delayNanoseconds: 0)
+        return true
     }
 
     /// 5초 실행 취소와 사용 기록 화면의 수동 복원이 함께 사용하는 단일 복원 경로입니다.
@@ -354,24 +408,20 @@ final class AppState: ObservableObject {
     private static func loadSavedCoupons() -> [Coupon] {
         guard let data = UserDefaults.standard.data(forKey: "saved-imported-coupons"),
               let coupons = try? JSONDecoder().decode([Coupon].self, from: data) else { return [] }
-        return coupons.filter { coupon in
-            coupon.expiresAt > .now && (Self.includesDemoFixtures || !Coupon.demoCoupons.contains(coupon))
-        }
+        return coupons.filter { $0.expiresAt > .now }
     }
 
     private static func loadSavedUsedCoupons() -> [UsedCoupon] {
         guard let data = UserDefaults.standard.data(forKey: "saved-used-coupons"),
               let coupons = try? JSONDecoder().decode([UsedCoupon].self, from: data) else { return [] }
-        return Self.includesDemoFixtures ? coupons : coupons.filter { !UsedCoupon.sampleHistory.contains($0) }
+        return coupons
     }
 
     private func persistCouponCollections() {
-        let importedCoupons = coupons.filter { !Coupon.demoCoupons.contains($0) }
-        if let encoded = try? JSONEncoder().encode(importedCoupons) {
+        if let encoded = try? JSONEncoder().encode(coupons) {
             UserDefaults.standard.set(encoded, forKey: "saved-imported-coupons")
         }
-        let userUsedCoupons = usedCoupons.filter { !UsedCoupon.sampleHistory.contains($0) }
-        if let encoded = try? JSONEncoder().encode(userUsedCoupons) {
+        if let encoded = try? JSONEncoder().encode(usedCoupons) {
             UserDefaults.standard.set(encoded, forKey: "saved-used-coupons")
         }
     }
@@ -428,15 +478,19 @@ final class AppState: ObservableObject {
             }
             guard !Task.isCancelled else { return }
             cloudSyncState = .syncing
-            let activeCoupons = coupons.filter { !Coupon.demoCoupons.contains($0) }
-            let history = usedCoupons.filter { !UsedCoupon.sampleHistory.contains($0) }
+            let activeCoupons = coupons
+            let history = usedCoupons
             let pendingRestoreIDs = pendingRestoredCouponIDs
+            let pendingDeletionIDs = pendingDeletedCouponIDs
             do {
                 try await FirestoreRepository.shared.save(consent: privacyConsent, uid: uid)
                 if privacyConsent.personalizationAccepted {
                     try await FirestoreRepository.shared.save(profile: profile, uid: uid)
                 } else {
                     try await FirestoreRepository.shared.clearPersonalization(uid: uid)
+                }
+                for couponID in pendingDeletionIDs {
+                    try await FirestoreRepository.shared.delete(couponID: couponID, uid: uid)
                 }
                 for coupon in activeCoupons {
                     try await FirestoreRepository.shared.save(coupon: coupon, uid: uid)
@@ -447,6 +501,8 @@ final class AppState: ObservableObject {
                 guard !Task.isCancelled else { return }
                 pendingRestoredCouponIDs.subtract(pendingRestoreIDs)
                 persistPendingRestoredCouponIDs()
+                pendingDeletedCouponIDs.subtract(pendingDeletionIDs)
+                persistPendingDeletedCouponIDs()
                 cloudSyncState = .synced
             } catch {
                 guard !Task.isCancelled else { return }
@@ -477,13 +533,15 @@ final class AppState: ObservableObject {
             UserDefaults.standard.removeObject(forKey: Self.privacyConsentKey)
             UserDefaults.standard.removeObject(forKey: Self.notificationRecommendationContextKey)
             UserDefaults.standard.removeObject(forKey: Self.pendingRestoredCouponIDsKey)
-            let fixtureCoupons = Self.includesDemoFixtures ? Coupon.demoCoupons : []
-            let fixtureHistory = Self.includesDemoFixtures ? UsedCoupon.sampleHistory : []
-            coupons = fixtureCoupons
-            usedCoupons = fixtureHistory
+            UserDefaults.standard.removeObject(forKey: Self.pendingDeletedCouponIDsKey)
+            coupons = []
+            usedCoupons = []
             pendingRestoredCouponIDs = []
+            pendingDeletedCouponIDs = []
             clearCouponUseUndo()
-            profile = Self.includesDemoFixtures ? .demo : .empty
+            couponDeletionUndoExpirationTask?.cancel()
+            recentlyDeletedCoupon = nil
+            profile = .empty
             privacyConsent = .empty
             currentStore = nil
             recommendation = nil
@@ -500,11 +558,10 @@ final class AppState: ObservableObject {
         currentStore = store
     }
 
-    func cacheRecommendation(_ recommendation: Recommendation, store: Store, origin: RecommendationOrigin) {
+    func cacheRecommendation(_ recommendation: Recommendation, store: Store) {
         self.recommendation = recommendation
-        recommendationOrigin = origin
         if let data = try? JSONEncoder().encode(
-            NotificationRecommendationContext(store: store, recommendation: recommendation, isDemo: origin == .demo)
+            NotificationRecommendationContext(store: store, recommendation: recommendation)
         ) {
             UserDefaults.standard.set(data, forKey: Self.notificationRecommendationContextKey)
         }
@@ -517,7 +574,6 @@ final class AppState: ObservableObject {
               context.store.id == storeID else { return false }
         currentStore = context.store
         recommendation = context.recommendation
-        recommendationOrigin = context.isDemo ? .demo : .live
         shouldShowRecommendation = true
         return true
     }
@@ -531,20 +587,19 @@ final class AppState: ObservableObject {
                     UserDefaults.standard.set(encoded, forKey: "saved-user-profile")
                 }
             }
-            let fixtureHistory = Self.includesDemoFixtures ? UsedCoupon.sampleHistory : []
             // An offline restore is locally authoritative until reconciliation atomically writes
             // the active document and removes its used-history counterpart in Firestore.
             let remoteHistory = remote.usedCoupons.filter { !pendingRestoredCouponIDs.contains($0.id) }
-            let mergedUsedCoupons = Self.mergedUsedCoupons(fixtureHistory, Self.loadSavedUsedCoupons(), remoteHistory)
+            let mergedUsedCoupons = Self.mergedUsedCoupons(Self.loadSavedUsedCoupons(), remoteHistory)
             usedCoupons = mergedUsedCoupons
             let usedCouponIDs = Set(mergedUsedCoupons.map(\.id))
-            let localImportedCoupons = coupons.filter { !Coupon.demoCoupons.contains($0) }
+            let localImportedCoupons = coupons
 
             if !remote.coupons.isEmpty {
                 let localImages = Dictionary(uniqueKeysWithValues: coupons.compactMap { coupon in coupon.localImageFilename.map { (coupon.id, $0) } })
                 let remoteCouponIDs = Set(remote.coupons.map(\.id))
                 let remoteCoupons = remote.coupons.compactMap { coupon -> Coupon? in
-                    guard Self.includesDemoFixtures || !Coupon.demoCoupons.contains(coupon) else { return nil }
+                    guard !pendingDeletedCouponIDs.contains(coupon.id) else { return nil }
                     return Coupon(id: coupon.id, brand: coupon.brand, title: coupon.title, discountType: coupon.discountType,
                                   discountValue: coupon.discountValue, minimumOrderAmount: coupon.minimumOrderAmount,
                                   maximumDiscount: coupon.maximumDiscount,
@@ -553,8 +608,7 @@ final class AppState: ObservableObject {
                                   conditions: coupon.conditions, localImageFilename: localImages[coupon.id])
                 }
                 let unsyncedLocalCoupons = localImportedCoupons.filter { !remoteCouponIDs.contains($0.id) && !usedCouponIDs.contains($0.id) }
-                let fixtureCoupons = Self.includesDemoFixtures ? Coupon.demoCoupons : []
-                coupons = (fixtureCoupons + remoteCoupons + unsyncedLocalCoupons).filter { !usedCouponIDs.contains($0.id) }
+                coupons = (remoteCoupons + unsyncedLocalCoupons).filter { !usedCouponIDs.contains($0.id) }
                 for coupon in unsyncedLocalCoupons {
                     try? await FirestoreRepository.shared.save(coupon: coupon, uid: uid)
                 }
@@ -563,7 +617,7 @@ final class AppState: ObservableObject {
                     try? await FirestoreRepository.shared.save(profile: profile, uid: uid)
                 }
                 coupons.removeAll { usedCouponIDs.contains($0.id) }
-                for coupon in coupons where !Coupon.demoCoupons.contains(coupon) {
+                for coupon in coupons {
                     try? await FirestoreRepository.shared.save(coupon: coupon, uid: uid)
                 }
             }
@@ -578,11 +632,8 @@ final class AppState: ObservableObject {
 
     private static func loadSavedProfile() -> UserProfile {
         guard let data = UserDefaults.standard.data(forKey: "saved-user-profile"),
-              let profile = try? JSONDecoder().decode(UserProfile.self, from: data) else {
-            return Self.includesDemoFixtures ? .demo : .empty
-        }
-        if !Self.includesDemoFixtures && profile.id == UserProfile.demo.id { return .empty }
-        return profile
+              let profile = try? JSONDecoder().decode(UserProfile.self, from: data) else { return .empty }
+        return profile.id == UserProfile.submission.id ? .empty : profile
     }
 
     private static func mergedUsedCoupons(_ collections: [UsedCoupon]...) -> [UsedCoupon] {
@@ -599,5 +650,13 @@ final class AppState: ObservableObject {
 
     private func persistPendingRestoredCouponIDs() {
         UserDefaults.standard.set(Array(pendingRestoredCouponIDs).sorted(), forKey: Self.pendingRestoredCouponIDsKey)
+    }
+
+    private static func loadPendingDeletedCouponIDs() -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: pendingDeletedCouponIDsKey) ?? [])
+    }
+
+    private func persistPendingDeletedCouponIDs() {
+        UserDefaults.standard.set(Array(pendingDeletedCouponIDs).sorted(), forKey: Self.pendingDeletedCouponIDsKey)
     }
 }

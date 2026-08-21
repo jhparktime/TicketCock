@@ -8,6 +8,7 @@ const INDEX_OBJECT = "benefits/v2/index.json";
 const DOCUMENT_PREFIX = "benefits/v2/documents";
 const CANDIDATE_PREFIX = "benefits/v2/candidates";
 const EMBEDDING_MODEL = "gemini-embedding-001";
+const MAX_OFFICIAL_SNAPSHOT_BYTES = 2 * 1024 * 1024;
 
 export type CalculatorBenefitRule = {
   provider: string;
@@ -82,7 +83,14 @@ export type BenefitCandidate = {
   schemaVersion: 1;
   submittedAt: string;
   submittedBy: string;
+  /** SHA-256 of the raw official HTTP response, not a reviewer-written summary. */
   sourceSnapshotHash: string;
+  sourceSnapshotObject: string;
+  sourceFinalURL: string;
+  sourceRetrievedAt: string;
+  sourceContentType: string;
+  /** Hash of the structured, reviewer-authored extraction submitted for approval. */
+  curatedContentHash: string;
   document: BenefitDocument;
 };
 
@@ -413,6 +421,37 @@ function candidateObjectName(documentId: string, version: string) {
   return `${CANDIDATE_PREFIX}/${documentId}/${version}.json`;
 }
 
+function candidateSnapshotObjectName(documentId: string, version: string, contentType: string) {
+  const extension = contentType.includes("pdf") ? "pdf" : contentType.includes("html") ? "html" : "txt";
+  return `${CANDIDATE_PREFIX}/${documentId}/${version}/source.${extension}`;
+}
+
+type CapturedOfficialSource = {
+  bytes: Buffer;
+  hash: string;
+  finalURL: string;
+  retrievedAt: string;
+  contentType: string;
+};
+
+/** Capture the exact official response and bind it to the provider allowlist after redirects. */
+async function captureOfficialSource(document: BenefitDocument): Promise<CapturedOfficialSource> {
+  const response = await fetch(document.sourceURL, {
+    redirect: "follow",
+    headers: { "user-agent": "CouponCock-benefit-review/1.0 (+official-source-verification)" },
+    signal: AbortSignal.timeout(15_000)
+  });
+  if (!response.ok) throw new Error(`Official source returned HTTP ${response.status}`);
+  if (!sourceURLIsOfficial(document.provider, response.url)) throw new Error("Official source redirect left the provider allowlist");
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0].trim().toLocaleLowerCase("en-US") ?? "application/octet-stream";
+  if (!/(text\/html|application\/pdf|text\/plain)/u.test(contentType)) throw new Error(`Official source content type is not reviewable: ${contentType}`);
+  const declaredSize = Number(response.headers.get("content-length") ?? 0);
+  if (Number.isFinite(declaredSize) && declaredSize > MAX_OFFICIAL_SNAPSHOT_BYTES) throw new Error("Official source exceeds snapshot size limit");
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (!bytes.length || bytes.length > MAX_OFFICIAL_SNAPSHOT_BYTES) throw new Error("Official source snapshot is empty or exceeds size limit");
+  return { bytes, hash: sha256(bytes.toString("base64")), finalURL: response.url, retrievedAt: new Date().toISOString(), contentType };
+}
+
 function reviewedCandidateDocument(document: BenefitDocument) {
   validateBenefitDocument(document);
   if (document.governance.status !== "reviewed") {
@@ -429,14 +468,35 @@ function reviewedCandidateDocument(document: BenefitDocument) {
 export async function submitOfficialBenefitCandidate(document: BenefitDocument, submittedBy: string) {
   reviewedCandidateDocument(document);
   if (!submittedBy.trim()) throw new Error("Candidate submission requires an operator identity");
+  const source = await captureOfficialSource(document);
+  const snapshotObject = candidateSnapshotObjectName(document.id, document.governance.version, source.contentType);
   const candidate: BenefitCandidate = {
     schemaVersion: 1,
     submittedAt: new Date().toISOString(),
     submittedBy: submittedBy.trim(),
-    sourceSnapshotHash: sha256(document.content),
+    sourceSnapshotHash: source.hash,
+    sourceSnapshotObject: snapshotObject,
+    sourceFinalURL: source.finalURL,
+    sourceRetrievedAt: source.retrievedAt,
+    sourceContentType: source.contentType,
+    curatedContentHash: sha256(document.content),
     document
   };
   const objectName = candidateObjectName(document.id, document.governance.version);
+  await storage().bucket(bucketName()).file(snapshotObject).save(source.bytes, {
+    contentType: source.contentType,
+    resumable: false,
+    preconditionOpts: { ifGenerationMatch: 0 },
+    metadata: {
+      metadata: {
+        sourceURL: source.finalURL,
+        sourceSnapshotHash: source.hash,
+        retrievedAt: source.retrievedAt,
+        documentId: document.id,
+        version: document.governance.version
+      }
+    }
+  });
   await storage().bucket(bucketName()).file(objectName).save(JSON.stringify(candidate), {
     contentType: "application/json",
     resumable: false,
@@ -447,6 +507,8 @@ export async function submitOfficialBenefitCandidate(document: BenefitDocument, 
     version: document.governance.version,
     status: "candidate" as const,
     sourceSnapshotHash: candidate.sourceSnapshotHash,
+    sourceSnapshotObject: candidate.sourceSnapshotObject,
+    curatedContentHash: candidate.curatedContentHash,
     objectName
   };
 }
@@ -463,16 +525,22 @@ async function loadOfficialBenefitCandidate(documentId: string, version: string)
   } catch {
     throw new Error("Benefit candidate JSON is invalid");
   }
-  if (candidate.schemaVersion !== 1 || !candidate.submittedAt || !candidate.submittedBy || !candidate.sourceSnapshotHash || !candidate.document) {
+  if (candidate.schemaVersion !== 1 || !candidate.submittedAt || !candidate.submittedBy || !candidate.sourceSnapshotHash || !candidate.sourceSnapshotObject || !candidate.sourceFinalURL || !candidate.sourceRetrievedAt || !candidate.sourceContentType || !candidate.curatedContentHash || !candidate.document) {
     throw new Error("Benefit candidate metadata is incomplete");
   }
   reviewedCandidateDocument(candidate.document);
   if (candidate.document.id !== documentId || candidate.document.governance.version !== version) {
     throw new Error("Benefit candidate identity does not match its storage path");
   }
-  if (candidate.sourceSnapshotHash !== sha256(candidate.document.content)) {
-    throw new Error("Benefit candidate source snapshot hash does not match its content");
+  if (candidate.curatedContentHash !== sha256(candidate.document.content)) {
+    throw new Error("Benefit candidate curated content hash does not match its content");
   }
+  if (!sourceURLIsOfficial(candidate.document.provider, candidate.sourceFinalURL)) throw new Error("Benefit candidate source URL is outside the provider allowlist");
+  const snapshot = storage().bucket(bucketName()).file(candidate.sourceSnapshotObject);
+  const [snapshotExists] = await snapshot.exists();
+  if (!snapshotExists) throw new Error("Benefit candidate official source snapshot is missing");
+  const [bytes] = await snapshot.download();
+  if (sha256(bytes.toString("base64")) !== candidate.sourceSnapshotHash) throw new Error("Benefit candidate official source snapshot hash does not match");
   return candidate;
 }
 
@@ -639,6 +707,10 @@ export async function approveOfficialBenefitCandidate(documentId: string, versio
     candidateSubmittedAt: candidate.submittedAt,
     candidateSubmittedBy: candidate.submittedBy,
     sourceSnapshotHash: candidate.sourceSnapshotHash,
+    sourceSnapshotObject: candidate.sourceSnapshotObject,
+    sourceFinalURL: candidate.sourceFinalURL,
+    sourceRetrievedAt: candidate.sourceRetrievedAt,
+    curatedContentHash: candidate.curatedContentHash,
     approvedBy: approvedBy.trim()
   };
 }

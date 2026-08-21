@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 
-/// 데모에서 위치 기반 추천을 지원하는 카페·음료·외식 프랜차이즈입니다.
+/// 위치 기반 추천을 지원하는 카페·음료·외식 프랜차이즈입니다.
 enum SupportedFranchise: String, CaseIterable, Identifiable, Hashable {
     case starbucks, twosome, mega, ediya, compose, paiks, hollys, coffeebean, gongcha, theventi
     case baskinrobbins, parisbaguette, touslesjours, ashleyqueens
@@ -70,9 +70,9 @@ struct Store: Identifiable, Codable, Hashable {
 
     var coordinate: CLLocationCoordinate2D { .init(latitude: latitude, longitude: longitude) }
 
-    /// 공공데이터 API 키 연결 전 위치 이벤트 검증에 사용하는 수원시 내 데모 매장입니다.
-    static let suwonDemoTwosome = Store(
-        id: "suwon-demo-twosome", name: "투썸플레이스 수원시청점 (데모)", category: "카페",
+    /// 제출 시뮬레이션에서 사용하는 수원시 내 기준 매장입니다.
+    static let suwonSubmissionTwosome = Store(
+        id: "suwon-submission-twosome", name: "투썸플레이스 수원시청점", category: "카페",
         latitude: 37.2636, longitude: 127.0286, radiusMeters: 120
     )
 }
@@ -161,7 +161,7 @@ struct Coupon: Identifiable, Codable, Hashable {
         value.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
     }
 
-    static let demoCoupons: [Coupon] = [
+    static let submissionCoupons: [Coupon] = [
         Coupon(id: "coupon-001", brand: "스타벅스", title: "음료 3,000원 할인", discountType: .fixedAmount, discountValue: 3000, minimumOrderAmount: 10000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 20), combinableWithCard: true, conditions: ["사이렌오더 제외", "타 쿠폰과 중복 불가"], localImageFilename: nil),
         Coupon(id: "coupon-002", brand: "스타벅스", title: "제조 음료 20% 할인", discountType: .percentage, discountValue: 20, minimumOrderAmount: 0, maximumDiscount: 2_000, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 6), combinableWithCard: false, conditions: ["최대 2,000원 할인"], localImageFilename: nil),
         Coupon(id: "coupon-003", brand: "베스킨라빈스", title: "싱글레귤러 1+1", discountType: .fixedAmount, discountValue: 3900, minimumOrderAmount: 3900, expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 14), combinableWithCard: false, conditions: ["동일 금액 또는 낮은 금액 상품 증정", "매장별 재고에 따라 사용 제한"], localImageFilename: nil),
@@ -275,7 +275,7 @@ struct UsedCoupon: Identifiable, Codable, Hashable {
                   localImageFilename: coupon.localImageFilename, originalCoupon: coupon)
     }
 
-    static let sampleHistory: [UsedCoupon] = [
+    static let submissionHistory: [UsedCoupon] = [
         UsedCoupon(
             id: "used-starbucks-3336977781", brand: "스타벅스",
             productName: "아이스 카페 아메리카노 T 2잔 + 부드러운 생크림 카스텔라",
@@ -321,6 +321,34 @@ struct PaymentCard: Codable, Equatable, Identifiable {
         PaymentCard(issuer: "KB국민카드", productId: "kbcard-talktalk-pay", productName: "KB국민 톡톡 Pay카드", previousMonthSpendQualified: false, monthlyBenefitRemainingAmount: 0),
         PaymentCard(issuer: "현대카드", productId: "hyundaicard-m", productName: "현대카드 M", previousMonthSpendQualified: false, monthlyBenefitRemainingAmount: 0)
     ]
+
+    static func catalogCard(productId: String?) -> PaymentCard? {
+        guard let productId else { return nil }
+        return catalog.first { $0.productId == productId }
+    }
+}
+
+/// A source link is returned only after the card product is identified from a non-sensitive,
+/// user-approved scan. It is evidence for a benefit check, never a payment authorization.
+struct CardBenefitEvidence: Codable, Equatable, Identifiable {
+    let title: String
+    let sourceURL: String
+    let limitations: String
+
+    var id: String { sourceURL }
+}
+
+/// Gemini may nominate only an allowlisted catalog product. The user must confirm the displayed
+/// product before it is persisted in `UserProfile.cards`; PAN, CVC, expiry and image data are not
+/// fields in this model by design.
+struct CardMultimodalRecognition: Decodable, Equatable {
+    let productId: String?
+    let confidence: Double
+    let requiresConfirmation: Bool
+    let benefitSources: [CardBenefitEvidence]
+
+    var card: PaymentCard? { PaymentCard.catalogCard(productId: productId) }
+    var needsManualSelection: Bool { card == nil || requiresConfirmation || confidence < 0.85 }
 }
 
 struct UserProfile: Codable, Equatable {
@@ -365,7 +393,7 @@ struct UserProfile: Codable, Equatable {
         cards = try values.decodeIfPresent([PaymentCard].self, forKey: .cards) ?? []
     }
 
-    static let demo = UserProfile(id: "demo-user", carrier: "LG U+", membershipGrade: "VIP", monthlyBenefitStatus: .available)
+    static let submission = UserProfile(id: "submission-user", carrier: "LG U+", membershipGrade: "VIP", monthlyBenefitStatus: .available)
     static let empty = UserProfile(id: "local-user", carrier: "없음", membershipGrade: "확인 필요", monthlyBenefitStatus: .unknown)
 }
 
@@ -408,7 +436,7 @@ struct Recommendation: Codable, Hashable {
     let explanation: String
     let benefitSources: [BenefitSource]
 
-    static func preview(for store: Store) -> Recommendation {
+    static func submissionPreview(for store: Store) -> Recommendation {
         Recommendation(
         storeName: store.name, originalPrice: 5_100,
         recommendedOption: PriceOption(id: "best", title: "아메리카노 2,000원 할인", originalPrice: 5_100, finalPrice: 3_100, savings: 2_000, badges: ["단품 기준가", "쿠폰"]),
@@ -420,7 +448,6 @@ struct Recommendation: Codable, Hashable {
     )
     }
 
-    static let preview = preview(for: .suwonDemoTwosome)
 }
 
 struct BenefitSource: Codable, Hashable, Identifiable {

@@ -26,6 +26,12 @@ adk eval couponcok_agent evals/couponcok_release_holdout.evalset.json \
 
 실행 결과의 run ID, 모델 버전, 프롬프트 버전, MCP/혜택 인덱스 버전을 릴리스 기록에 남깁니다.
 
+GitHub Actions의 **Release Agent Evaluation**은 PR마다 결정론 계약·Guardrail·holdout 스키마를 검사합니다.
+보호된 스테이징에서 실제 모델·MCP 호출은 수동 실행(`run_remote_holdout=true`)으로만 허용합니다.
+이때 `GCP_WIF_PROVIDER`, `GCP_EVAL_SERVICE_ACCOUNT`, `GCP_PROJECT_ID`, `MCP_STAGING_URL`,
+`MCP_STAGING_TOKEN`을 GitHub Environment `staging`의 Secret으로 등록합니다. 서비스 계정 키 파일이나
+MCP 토큰을 저장소·평가 결과·AgentOps 로그에 기록하지 않습니다.
+
 ## 개인정보·정책 경계 평가
 
 `privacy_guardrail_cases.json`은 모델 호출 없이 `pytest`에서 실행되는 결정론적 평가셋입니다.

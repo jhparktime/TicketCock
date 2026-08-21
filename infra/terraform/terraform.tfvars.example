@@ -1,0 +1,7 @@
+project_id             = "proj-aj21-211200020328"
+region                 = "asia-northeast3"
+api_image              = "asia-northeast3-docker.pkg.dev/proj-aj21-211200020328/couponcok/couponcok-api:IMMUTABLE_TAG"
+benefits_bucket        = "coupon-pilot-benefits-601392084114"
+# Set the exact service agent shown in API Gateway's backend authentication configuration.
+gateway_invoker_member = "serviceAccount:service-PROJECT_NUMBER@gcp-sa-apigateway.iam.gserviceaccount.com"
+model_armor_template   = "couponcok-production-guardrail"

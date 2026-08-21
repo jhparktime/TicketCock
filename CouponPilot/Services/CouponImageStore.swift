@@ -31,6 +31,13 @@ final class CouponImageStore {
         return UIImage(contentsOfFile: directoryURL.appendingPathComponent(filename).path)
     }
 
+    func delete(named filename: String?) throws {
+        guard let filename else { return }
+        let url = directoryURL.appendingPathComponent(filename)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try FileManager.default.removeItem(at: url)
+    }
+
     func deleteAll() throws {
         let files = try FileManager.default.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil)
         for file in files {

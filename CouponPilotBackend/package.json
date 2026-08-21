@@ -12,6 +12,7 @@
     "test:mcp": "tsx test/mcp.test.ts",
     "start": "node dist/server.js",
     "start:mcp": "node dist/mcpServer.js",
+    "sync:stores": "tsx src/jobs/syncStoreDirectory.ts",
     "ingest:benefit": "tsx scripts/ingestBenefit.ts",
     "approve:benefit": "tsx scripts/approveBenefit.ts",
     "retire:benefit": "tsx scripts/retireBenefit.ts"

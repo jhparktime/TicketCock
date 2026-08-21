@@ -149,7 +149,7 @@ def validate_tool_call(
             "쿠폰 원문·바코드·카드번호·연락처·사용자 식별자는 도구로 전달할 수 없습니다."
         )
 
-    if tool.name == "search_nearby_stores":
+    if tool.name in {"search_nearby_stores", "verify_store_with_external_maps"}:
         latitude = args.get("latitude")
         longitude = args.get("longitude")
         radius = args.get("radiusMeters", 1_000)
@@ -159,6 +159,10 @@ def validate_tool_call(
             return _blocked("MVP 서비스 지역인 수원시 경도 범위를 벗어났습니다.")
         if not isinstance(radius, int) or not 100 <= radius <= 1_500:
             return _blocked("매장 검색 반경은 100~1,500m여야 합니다.")
+        if tool.name == "verify_store_with_external_maps":
+            store_name = args.get("storeName")
+            if not isinstance(store_name, str) or not 1 <= len(store_name.strip()) <= 150:
+                return _blocked("외부 지도 검증에는 유효한 매장명이 필요합니다.")
 
     if tool.name == "retrieve_carrier_benefits":
         if args.get("carrier") not in ALLOWED_CARRIERS:

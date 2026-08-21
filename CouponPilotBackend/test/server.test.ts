@@ -6,7 +6,7 @@ import { calculateOptions, matchingBenefitRules } from "../src/calculator.js";
 import { adkResultMatchesCalculator, shouldRunAdk } from "../src/adkClient.js";
 import { validateBenefitDocument } from "../src/benefitRag.js";
 import { assertAgentPayloadSafe, findSensitiveValue, pseudonymizeSubject, redactSensitiveText } from "../src/privacy.js";
-import { app } from "../src/server.js";
+import { app, cardRecognitionInputIsSafe } from "../src/server.js";
 import { createMcpApp } from "../src/mcpServer.js";
 
 const server = app.listen(0, "127.0.0.1");
@@ -89,6 +89,46 @@ try {
   assert.equal(redactedOCR.text.includes("1234-5678-9012-3456"), false);
   assert.equal(redactedOCR.text.includes("user@example.com"), false);
   assert.match(redactedOCR.text, /스타벅스 아메리카노/u);
+
+  const safeCardVisualSignature = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)]).toString("base64");
+  assert.equal(
+    cardRecognitionInputIsSafe({
+      frontText: "신한카드 Mr.Life [민감정보 제거]",
+      backText: "상품명 확인용 문구",
+      frontVisualSignatureBase64: safeCardVisualSignature
+    }),
+    true,
+    "card classifier accepts only device-sanitized secret-free text"
+  );
+  assert.equal(
+    cardRecognitionInputIsSafe({
+      frontText: "신한카드 4111 1111 1111 1111",
+      backText: "",
+      frontVisualSignatureBase64: safeCardVisualSignature
+    }),
+    false,
+    "PAN-like text must be rejected before Gemini is called"
+  );
+  assert.equal(
+    cardRecognitionInputIsSafe({
+      frontText: "신한카드",
+      backText: "CVV 123",
+      frontVisualSignatureBase64: safeCardVisualSignature
+    }),
+    false,
+    "CVC labels must be rejected even when the number is short"
+  );
+  const cardImageInput = await fetch(`${baseURL}/v1/cards/recognize`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      frontText: "신한카드 Mr.Life",
+      backText: "",
+      originalFrontImageBase64: "not-allowed",
+      userApprovedCloudAnalysis: true
+    })
+  });
+  assert.equal(cardImageInput.status, 400, "card recognition must reject original-image fields and accept only an iOS-redacted visual signature");
 
   const health = await fetch(`${baseURL}/health`);
   assert.equal(health.status, 200);
@@ -283,7 +323,7 @@ try {
     await client.connect(transport);
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-      "calculate_best_discount", "retrieve_carrier_benefits", "search_nearby_stores"
+      "calculate_best_discount", "retrieve_carrier_benefits", "search_nearby_stores", "verify_store_with_external_maps"
     ]);
 
     const calculation = await client.callTool({
@@ -297,8 +337,7 @@ try {
           id: "twosome-americano", brand: "투썸플레이스", title: "아메리카노 2,000원 할인",
           discountType: "fixedAmount", discountValue: 2_000, minimumOrderAmount: 5_000,
           combinableWithCard: true, referencePrice: 5_100
-        }],
-        benefitRules: []
+        }]
       }
     });
     const structured = calculation.structuredContent as { recommendedOption: { finalPrice: number; savings: number } };

@@ -68,6 +68,10 @@ final class FirestoreRepository {
         try await batch.commit()
     }
 
+    func delete(couponID: String, uid: String) async throws {
+        try await database.collection("users").document(uid).collection("coupons").document(couponID).delete()
+    }
+
     func moveToUsedHistory(coupon: Coupon, uid: String) async throws {
         try await save(usedCoupon: UsedCoupon(coupon: coupon), uid: uid)
     }

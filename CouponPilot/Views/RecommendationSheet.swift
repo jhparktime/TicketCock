@@ -2,10 +2,9 @@ import SwiftUI
 
 struct RecommendationSheet: View {
     let recommendation: Recommendation
-    let isDemo: Bool
     var onOpenCoupon: (() -> Void)?
 
-    private var accent: Color { isDemo ? .orange : .cyan }
+    private var accent: Color { AppPalette.accent }
 
     var body: some View {
         ZStack {
@@ -23,7 +22,7 @@ struct RecommendationSheet: View {
                                 .padding(.vertical, 15)
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(.teal)
+                        .tint(AppPalette.accent)
                         .accessibilityHint("쿠폰 이미지와 사용 조건을 확인합니다")
                     }
                     aiExplanation
@@ -60,13 +59,13 @@ struct RecommendationSheet: View {
             }
 
             HStack(spacing: 7) {
-                Image(systemName: isDemo ? "testtube.2" : "checkmark.seal.fill")
-                Text(isDemo ? "데모 추천" : "계산 결과")
+                Image(systemName: "checkmark.seal.fill")
+                Text("계산 결과")
                 Text("·")
-                Text(isDemo ? "시연용" : "실시간 API")
+                Text("Calculator Tool")
             }
             .font(.caption.weight(.bold))
-            .foregroundStyle(isDemo ? Color.orange : Color.teal)
+            .foregroundStyle(AppPalette.accent)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(.white.opacity(0.48), in: Capsule())
@@ -74,10 +73,10 @@ struct RecommendationSheet: View {
     }
 
     private var bestOption: some View {
-        RecommendationGlassSurface(tint: .mint) {
+        RecommendationGlassSurface(tint: accent) {
             Label("가장 좋은 조합", systemImage: "seal.fill")
                 .font(.caption.weight(.bold))
-                .foregroundStyle(.teal)
+                .foregroundStyle(AppPalette.accent)
 
             Text(recommendation.recommendedOption.title)
                 .font(.title3.weight(.bold))
@@ -92,7 +91,7 @@ struct RecommendationSheet: View {
                 Spacer()
                 Text("−\(recommendation.recommendedOption.savings.formatted())원")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppPalette.accent)
             }
 
             FlowLayout(spacing: 7) {
@@ -109,10 +108,10 @@ struct RecommendationSheet: View {
     }
 
     private var aiExplanation: some View {
-        RecommendationGlassSurface(tint: .purple) {
+        RecommendationGlassSurface(tint: accent) {
             Label("생성형 AI가 작성한 추천 설명", systemImage: "sparkles")
                 .font(.headline)
-                .foregroundStyle(.indigo)
+                .foregroundStyle(AppPalette.ink)
             Text(recommendation.explanation)
                 .font(.subheadline)
                 .foregroundStyle(.primary.opacity(0.76))
@@ -120,7 +119,7 @@ struct RecommendationSheet: View {
 
             Label("금액·절약액·순위는 규칙 기반 Calculator 결과이며 AI가 변경할 수 없어요.", systemImage: "checkmark.shield.fill")
                 .font(.caption)
-                .foregroundStyle(.teal)
+                .foregroundStyle(AppPalette.accent)
                 .fixedSize(horizontal: false, vertical: true)
 
             Label("쿠폰콕은 결제를 실행하거나 승인하지 않아요. 실제 적용 여부와 결제 금액은 매장·카드사에서 최종 확인해 주세요.", systemImage: "creditcard.trianglebadge.exclamationmark")
@@ -128,28 +127,22 @@ struct RecommendationSheet: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if isDemo {
-                Label("서버 응답이 아닌 시연용 계산 결과입니다.", systemImage: "info.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .padding(.top, 2)
-            }
         }
     }
 
     @ViewBuilder
     private var sourceSection: some View {
         if !recommendation.benefitSources.isEmpty {
-            RecommendationGlassSurface(tint: .cyan) {
+            RecommendationGlassSurface(tint: accent) {
                 Label("공식 혜택 근거", systemImage: "checkmark.seal.fill")
                     .font(.headline)
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppPalette.accent)
                 ForEach(recommendation.benefitSources) { source in
                     Link(destination: URL(string: source.sourceURL)!) {
                         HStack(spacing: 11) {
                             Image(systemName: "doc.text.fill")
                                 .font(.title3)
-                                .foregroundStyle(.teal)
+                                .foregroundStyle(AppPalette.accent)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(source.provider).font(.subheadline.weight(.bold))
                                 Text(source.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -172,7 +165,7 @@ struct RecommendationSheet: View {
                 }
             }
         } else {
-            RecommendationGlassSurface(tint: .gray) {
+            RecommendationGlassSurface(tint: accent) {
                 Label("공식 혜택 근거 없음", systemImage: "info.circle")
                     .font(.headline)
                     .foregroundStyle(.secondary)
@@ -189,7 +182,7 @@ struct RecommendationSheet: View {
                 .font(.headline)
                 .padding(.leading, 4)
             ForEach(recommendation.alternatives) { option in
-                RecommendationGlassSurface(tint: .blue, cornerRadius: 20) {
+                RecommendationGlassSurface(tint: accent, cornerRadius: 20) {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(option.title).font(.subheadline.weight(.semibold))
@@ -211,16 +204,9 @@ private struct RecommendationLiquidBackground: View {
     let accent: Color
 
     var body: some View {
-        LinearGradient(
-            colors: [Color(red: 0.96, green: 0.98, blue: 1), Color(red: 0.93, green: 0.96, blue: 1), Color(red: 0.98, green: 0.95, blue: 1)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        LinearGradient(colors: [AppPalette.canvas, AppPalette.canvas.opacity(0.90)], startPoint: .top, endPoint: .bottom)
         .overlay(alignment: .topTrailing) {
-            Circle().fill(accent.opacity(0.20)).frame(width: 300).blur(radius: 72).offset(x: 95, y: -105)
-        }
-        .overlay(alignment: .bottomLeading) {
-            Circle().fill(.purple.opacity(0.14)).frame(width: 280).blur(radius: 78).offset(x: -105, y: 110)
+            Circle().fill(accent.opacity(0.14)).frame(width: 340).blur(radius: 90).offset(x: 115, y: -130)
         }
         .ignoresSafeArea()
     }
@@ -237,10 +223,10 @@ private struct RecommendationGlassSurface<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    .fill(.regularMaterial)
                     .overlay {
                         LinearGradient(
-                            colors: [.white.opacity(0.52), tint.opacity(0.12), .white.opacity(0.10)],
+                            colors: [.white.opacity(0.48), tint.opacity(0.08), .white.opacity(0.04)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -249,11 +235,11 @@ private struct RecommendationGlassSurface<Content: View>: View {
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        LinearGradient(colors: [.white.opacity(0.88), tint.opacity(0.22), .white.opacity(0.36)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                        LinearGradient(colors: [.white.opacity(0.82), tint.opacity(0.14)], startPoint: .topLeading, endPoint: .bottomTrailing),
                         lineWidth: 1
                     )
             }
-            .shadow(color: tint.opacity(0.10), radius: 18, y: 9)
+            .shadow(color: AppPalette.ink.opacity(0.06), radius: 14, y: 7)
     }
 }
 

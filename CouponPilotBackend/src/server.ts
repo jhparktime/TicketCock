@@ -17,11 +17,15 @@ import {
 } from "./calculator.js";
 import { initializeObservability, recordAIUsage, requestCorrelationID, traceHttpRequest, traceOperation } from "./observability.js";
 import { adkResultMatchesCalculator, configuredAdkMode, runAdkOrchestration, shouldRunAdk } from "./adkClient.js";
-import { redactSensitiveText } from "./privacy.js";
-import { checkModelArmorText, configuredDlpMode, configuredModelArmorMode, deidentifyTextForModel } from "./cloudSafety.js";
+import { findSensitiveValue, redactSensitiveText } from "./privacy.js";
+import { checkModelArmorText, configuredDlpMode, configuredModelArmorMode, deidentifyTextForModel, redactCardVisualSignatureForModel } from "./cloudSafety.js";
 
 export const app = express();
-app.use(express.json({ limit: "32kb" }));
+// Card recognition accepts only an iOS-redacted front visual signature. Its Base64 transport
+// expands the already bounded 120KB JPEG to roughly 160KB, so a 32KB parser limit rejected a
+// valid safe request before its route-level schema/DLP checks could run. Keep a modest global
+// ceiling: every route still has a closed Zod schema and card recognition is rate-limited.
+app.use(express.json({ limit: "256kb" }));
 app.use(traceHttpRequest);
 
 const SUWON_BOUNDS = { minLat: 37.18, maxLat: 37.34, minLon: 126.90, maxLon: 127.15 };
@@ -52,7 +56,7 @@ type PublicStore = {
   signguNm?: string; rdnmAdr?: string; lon: string | number; lat: string | number;
 };
 
-type ReturnedStore = {
+export type ReturnedStore = {
   id: string; name: string; category: string; address: string; latitude: number; longitude: number; distanceMeters: number;
 };
 
@@ -91,10 +95,127 @@ const recommendationRequestSchema = z.object({
   coupons: z.array(couponRequestSchema).min(1).max(100)
 }).strict();
 
+/**
+ * This endpoint never accepts a card photo. It accepts only an iOS-rendered front visual signature
+ * after all detected text and the lower card half are masked, then Vision has confirmed no text
+ * remains. The original front/back photos, PAN, CVC, barcode and expiry are never request fields.
+ */
+const cardRecognitionRequestSchema = z.object({
+  frontText: z.string().min(1).max(2_500),
+  backText: z.string().max(2_500),
+  frontVisualSignatureBase64: z.string().min(100).max(160_000).regex(/^[A-Za-z0-9+/=]+$/u),
+  userApprovedCloudAnalysis: z.literal(true)
+}).strict();
+
+const CARD_PRODUCT_CATALOG = [
+  {
+    productId: "shinhancard-mr-life",
+    issuer: "신한카드",
+    productName: "신한카드 Mr.Life",
+    benefit: {
+      title: "신한카드 Mr.Life 공식 혜택 안내",
+      sourceURL: "https://www.shinhancard.com/pconts/html/card/apply/credit/1187937_2207.html",
+      limitations: "전월 실적·가맹점 업종·시간대·월 할인 한도는 카드사 공식 화면에서 최종 확인해야 합니다."
+    }
+  },
+  {
+    productId: "kbcard-talktalk-pay",
+    issuer: "KB국민카드",
+    productName: "KB국민 톡톡 Pay카드",
+    benefit: {
+      title: "KB국민 톡톡 Pay카드 공식 혜택 안내",
+      sourceURL: "https://card.kbcard.com/CMN/DVIEW/HOAMCXPRICC0002",
+      limitations: "전월 실적·대상 가맹점·월 할인 한도는 KB국민카드 공식 화면에서 최종 확인해야 합니다."
+    }
+  },
+  {
+    productId: "hyundaicard-m",
+    issuer: "현대카드",
+    productName: "현대카드 M",
+    benefit: {
+      title: "현대카드 M 공식 혜택 안내",
+      sourceURL: "https://www.hyundaicard.com/cpc/cr/CPCCR0201_01.hc?cardWcd=M",
+      limitations: "적립·할인 조건과 대상 업종은 현대카드 공식 상품 안내에서 최종 확인해야 합니다."
+    }
+  }
+] as const;
+
+const CARD_EXPIRY_PATTERN = /\b(?:0?[1-9]|1[0-2])\s*[/.-]\s*(?:\d{2}|\d{4})\b/u;
+const CARD_CVC_PATTERN = /\b(?:cvc|cvv|security\s*code|보안\s*코드)\b\s*[:#-]?\s*\d{0,4}/iu;
+
+/** Return only a category, never the sensitive value itself. */
+export function cardRecognitionInputIsSafe(input: { frontText: string; backText: string; frontVisualSignatureBase64: string }) {
+  const joinedText = `${input.frontText}\n${input.backText}`;
+  if (findSensitiveValue(joinedText)) return false;
+  if (CARD_EXPIRY_PATTERN.test(joinedText) || CARD_CVC_PATTERN.test(joinedText)) return false;
+  const image = Buffer.from(input.frontVisualSignatureBase64, "base64");
+  const jpeg = image.length >= 4 && image.subarray(0, 2).equals(Buffer.from([0xff, 0xd8]));
+  const png = image.length >= 8 && image.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  return image.length > 0 && image.length <= 120_000 && (jpeg || png);
+}
+
 type PersistedStoreDirectory = {
   expiresAtMillis: number;
   stores: ReturnedStore[];
 };
+
+const PRELOADED_SUWON_DIRECTORY_ID = "suwon-supported-franchises-v1";
+const PRELOADED_SUWON_DIRECTORY_TTL_MS = 36 * 60 * 60 * 1_000;
+const preloadedStoreSchema = z.object({
+  id: z.string().min(1).max(150),
+  name: z.string().min(1).max(200),
+  category: z.string().max(100),
+  address: z.string().max(500),
+  latitude: z.number().finite(),
+  longitude: z.number().finite(),
+  distanceMeters: z.number().finite().nonnegative().optional()
+}).strict();
+
+function canonicalStore(store: ReturnedStore): ReturnedStore {
+  return { ...store, distanceMeters: Math.max(0, Math.round(store.distanceMeters)) };
+}
+
+async function loadPreloadedSuwonStores(): Promise<ReturnedStore[] | undefined> {
+  try {
+    if (!getApps().length) initializeApp();
+    const snapshot = await getFirestore().collection("storeDirectories").doc(PRELOADED_SUWON_DIRECTORY_ID).get();
+    const data = snapshot.data();
+    if (!data || typeof data.expiresAtMillis !== "number" || data.expiresAtMillis <= Date.now() || !Array.isArray(data.stores)) return undefined;
+    const stores = data.stores
+      .map((item) => preloadedStoreSchema.safeParse(item))
+      .filter((result) => result.success)
+      .map((result) => result.data)
+      .filter((store) => isWithinSuwon(store.latitude, store.longitude))
+      .filter((store) => isSupportedFranchiseStore(store.name))
+      .map((store) => ({ ...store, distanceMeters: 0 }));
+    return stores.length ? stores : undefined;
+  } catch (error) {
+    // A missing preloaded directory is never a reason to lose the live data.go.kr fallback.
+    console.warn("Preloaded Suwon store directory unavailable", error instanceof Error ? error.message : error);
+    return undefined;
+  }
+}
+
+/** Store-sync job writes a single bounded Firestore document, so request-time lookup is local. */
+export async function savePreloadedSuwonStores(stores: ReturnedStore[], actor = "store-sync-job") {
+  if (!getApps().length) initializeApp();
+  const deduplicated = [...new Map(stores
+    .filter((store) => isWithinSuwon(store.latitude, store.longitude))
+    .filter((store) => isSupportedFranchiseStore(store.name))
+    .map((store) => [store.id, canonicalStore(store)])).values()]
+    .sort((left, right) => left.name.localeCompare(right.name, "ko-KR"));
+  if (!deduplicated.length) throw new Error("Refusing to replace the preloaded Suwon directory with no stores");
+  await getFirestore().collection("storeDirectories").doc(PRELOADED_SUWON_DIRECTORY_ID).set({
+    schemaVersion: 1,
+    scope: "수원시",
+    source: SUWON_STORE_DATA_SOURCE,
+    stores: deduplicated,
+    updatedAt: Timestamp.now(),
+    updatedBy: actor,
+    expiresAtMillis: Date.now() + PRELOADED_SUWON_DIRECTORY_TTL_MS
+  });
+  return { storeCount: deduplicated.length, expiresAtMillis: Date.now() + PRELOADED_SUWON_DIRECTORY_TTL_MS };
+}
 
 function appCheckMode() {
   const value = process.env.APP_CHECK_ENFORCEMENT_MODE;
@@ -168,6 +289,9 @@ const endpointQuotas: Record<string, { windowMs: number; limit: number }> = {
   "GET /v1/stores/nearby": { windowMs: 60 * 60 * 1_000, limit: 120 },
   "GET /v1/benefits/search": { windowMs: 24 * 60 * 60 * 1_000, limit: 120 },
   "POST /v1/coupons/normalize": { windowMs: 24 * 60 * 60 * 1_000, limit: 30 },
+  // Multimodal calls are intentionally scarce: each one is an explicit user action and bills a
+  // model request, while no card image or OCR text is persisted for retry.
+  "POST /v1/cards/recognize": { windowMs: 24 * 60 * 60 * 1_000, limit: 10 },
   "POST /v1/recommendations": { windowMs: 24 * 60 * 60 * 1_000, limit: 120 }
 };
 
@@ -384,8 +508,100 @@ async function normalizeCouponRawText(rawText: string) {
   return JSON.parse(text);
 }
 
+/**
+ * Gemini is a catalog classifier here, not an authority on a person's card or its benefits.
+ * It can return only one of our reviewed product IDs. The user still confirms the displayed
+ * product before it is persisted; Calculator rules remain sourced from approved RAG documents.
+ */
+async function recognizeSanitizedCard(input: z.infer<typeof cardRecognitionRequestSchema>) {
+  const safeInput = {
+    frontText: input.frontText,
+    backText: input.backText,
+    frontVisualSignatureBase64: input.frontVisualSignatureBase64
+  };
+  if (!cardRecognitionInputIsSafe(safeInput)) throw new Error("Card recognition payload contained an unsupported or sensitive value");
+  const frontText = await deidentifyTextForModel(input.frontText);
+  const backText = await deidentifyTextForModel(input.backText);
+  const dlpRedactedVisualSignature = await redactCardVisualSignatureForModel(input.frontVisualSignatureBase64);
+  await checkModelArmorText(`${frontText.text}\n${backText.text}`, "prompt");
+
+  const client = await geminiClient();
+  const catalog = CARD_PRODUCT_CATALOG.map(({ productId, issuer, productName }) => ({ productId, issuer, productName }));
+  const response = await client.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: [{
+      role: "user",
+      parts: [
+        {
+          text: JSON.stringify({
+            task: "Classify a payment-card product only from sanitized OCR text and a redacted front visual signature.",
+            catalog,
+            sanitizedFrontOCR: frontText.text,
+            sanitizedBackOCR: backText.text,
+            restrictions: [
+              "The image is a visual signature with text and sensitive zones deliberately blacked out. Do not attempt to infer, reconstruct or output hidden text, card number, expiry, CVC, barcode, owner, payment history, or any benefit amount.",
+              "Choose productId only when it exactly matches an item in catalog; otherwise use null.",
+              "Low-confidence or ambiguous output must set requiresConfirmation true."
+            ]
+          })
+        },
+        { inlineData: { mimeType: "image/jpeg", data: dlpRedactedVisualSignature } }
+      ]
+    }],
+    config: {
+      temperature: 0,
+      maxOutputTokens: 180,
+      thinkingConfig: { thinkingBudget: 0 },
+      responseMimeType: "application/json",
+      systemInstruction: "Return strict JSON only: {productId:string|null, confidence:number, requiresConfirmation:boolean}. You are a non-sensitive catalog matcher. Never generate a new product or financial benefit facts."
+    }
+  });
+  const usage = response.usageMetadata as { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } | undefined;
+  recordAIUsage({
+    operation: "card_catalog_classification",
+    model: GEMINI_MODEL,
+    promptTokens: usage?.promptTokenCount,
+    outputTokens: usage?.candidatesTokenCount,
+    totalTokens: usage?.totalTokenCount
+  });
+  const raw = typeof response.text === "string" ? response.text.trim() : "";
+  if (!raw) throw new Error("Gemini returned no card classification JSON");
+  await checkModelArmorText(raw, "response");
+  const parsed = JSON.parse(raw) as { productId?: unknown; confidence?: unknown; requiresConfirmation?: unknown };
+  const productId = typeof parsed.productId === "string" && CARD_PRODUCT_CATALOG.some((card) => card.productId === parsed.productId)
+    ? parsed.productId
+    : undefined;
+  const rawConfidence = typeof parsed.confidence === "number" && Number.isFinite(parsed.confidence) ? parsed.confidence : 0;
+  const confidence = Math.min(1, Math.max(0, rawConfidence));
+  const requiresConfirmation = productId === undefined || confidence < 0.85 || parsed.requiresConfirmation !== false;
+  const product = CARD_PRODUCT_CATALOG.find((card) => card.productId === productId);
+  return {
+    productId: product?.productId ?? null,
+    confidence,
+    requiresConfirmation,
+    benefitSources: product ? [product.benefit] : []
+  };
+}
+
 /** 공공데이터 키를 Cloud Run에서만 사용해 수원시 매장을 반환합니다. */
+/**
+ * Serving path: use the scheduler-refreshed Firestore directory first. The slow public API is
+ * retained only as a stale/missing-directory fallback and is never the normal location request.
+ */
 export async function fetchNearbySuwonStores(lat: number, lon: number, radius: number, query?: string) {
+  const preloaded = await loadPreloadedSuwonStores();
+  if (preloaded) {
+    const nearby = preloaded
+      .map((store) => ({ ...store, distanceMeters: distanceMeters(lat, lon, store.latitude, store.longitude) }))
+      .filter((store) => store.distanceMeters <= radius)
+      .sort((left, right) => left.distanceMeters - right.distanceMeters);
+    return filterStoresByQuery(nearby, query);
+  }
+  return fetchLiveNearbySuwonStores(lat, lon, radius, query);
+}
+
+/** Scheduler-only/public-directory fallback path. Never call this on a user request if preloaded data exists. */
+export async function fetchLiveNearbySuwonStores(lat: number, lon: number, radius: number, query?: string, pageCount = FRANCHISE_DISCOVERY_PAGE_COUNT) {
   const configuredServiceKey = process.env.DATA_GO_KR_SERVICE_KEY?.trim();
   if (!configuredServiceKey) throw new Error("DATA_GO_KR_SERVICE_KEY is not configured");
 
@@ -424,7 +640,7 @@ export async function fetchNearbySuwonStores(lat: number, lon: number, radius: n
     return Array.isArray(rawItems) ? rawItems : rawItems?.item ?? [];
   };
 
-  const pages = Array.from({ length: FRANCHISE_DISCOVERY_PAGE_COUNT }, (_, index) => index + 1);
+  const pages = Array.from({ length: Math.min(Math.max(pageCount, 1), FRANCHISE_DISCOVERY_PAGE_COUNT) }, (_, index) => index + 1);
   const pageItems: PublicStore[] = [];
   let successfulPageCount = 0;
   // The portal enforces a strict per-second cap per key. A sequential, paced scan is slower only
@@ -530,6 +746,23 @@ app.post("/v1/coupons/normalize", async (req, res) => {
   } catch (error) {
     console.error("Coupon normalization failed", error);
     res.status(502).json({ error: "coupon normalization failed" });
+  }
+});
+
+app.post("/v1/cards/recognize", async (req, res) => {
+  const parsed = cardRecognitionRequestSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid card recognition request" });
+  if (!cardRecognitionInputIsSafe(parsed.data)) {
+    // Do not name or echo the detected field: API and Cloud Run logs must not become a
+    // secondary collection point for payment-card data.
+    return res.status(400).json({ error: "Card recognition accepts only device-sanitized input" });
+  }
+  if (!process.env.VERTEX_PROJECT_ID) return res.status(503).json({ error: "card recognition is not configured" });
+  try {
+    res.json({ recognition: await recognizeSanitizedCard(parsed.data) });
+  } catch (error) {
+    console.error("Card multimodal classification failed", error instanceof Error ? error.message : "unknown error");
+    res.status(502).json({ error: "card recognition could not be completed" });
   }
 });
 

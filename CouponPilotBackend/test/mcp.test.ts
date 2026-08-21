@@ -7,12 +7,16 @@ import { createMcpApp } from "../src/mcpServer.js";
 const previousEnvironment = {
   NODE_ENV: process.env.NODE_ENV,
   MCP_HOST: process.env.MCP_HOST,
-  MCP_INTERNAL_TOKEN: process.env.MCP_INTERNAL_TOKEN
+  MCP_INTERNAL_TOKEN: process.env.MCP_INTERNAL_TOKEN,
+  GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY,
+  KAKAO_REST_API_KEY: process.env.KAKAO_REST_API_KEY
 };
 
 process.env.NODE_ENV = "mcp-contract";
 process.env.MCP_HOST = "127.0.0.1";
 process.env.MCP_INTERNAL_TOKEN = "contract-test-token";
+delete process.env.GOOGLE_MAPS_API_KEY;
+delete process.env.KAKAO_REST_API_KEY;
 
 const httpServer = createMcpApp().listen(0, "127.0.0.1");
 await once(httpServer, "listening");
@@ -36,7 +40,7 @@ function errorText(result: Awaited<ReturnType<Client["callTool"]>>) {
 try {
   const health = await fetch(`${baseURL}/health`);
   assert.equal(health.status, 200);
-  assert.deepEqual(await health.json(), { ok: true, service: "couponcok-mcp", tools: 3 });
+  assert.deepEqual(await health.json(), { ok: true, service: "couponcok-mcp", tools: 4 });
   assert.match(health.headers.get("x-couponcok-request-id") ?? "", /^[0-9a-f-]{36}$/u);
 
   const unauthorized = await fetch(`${baseURL}/mcp`, {
@@ -82,7 +86,8 @@ try {
     assert.deepEqual(listed.tools.map((tool) => tool.name).sort(), [
       "calculate_best_discount",
       "retrieve_carrier_benefits",
-      "search_nearby_stores"
+      "search_nearby_stores",
+      "verify_store_with_external_maps"
     ]);
     for (const tool of listed.tools) {
       assert.equal(tool.inputSchema.type, "object", `${tool.name} must publish an object input schema`);
@@ -96,6 +101,25 @@ try {
     const storeOutputSchema = storeTool?.outputSchema as { properties?: Record<string, { type?: unknown; additionalProperties?: unknown }> } | undefined;
     assert.equal(storeOutputSchema?.properties?.sourceMetadata?.type, "object", "public store provenance must be exposed to the Agent");
     assert.equal(storeOutputSchema?.properties?.sourceMetadata?.additionalProperties, false, "public store provenance must remain schema-bound");
+
+    const externalMaps = await client.callTool({
+      name: "verify_store_with_external_maps",
+      arguments: {
+        storeName: "투썸플레이스 수원시청점",
+        latitude: 37.2663,
+        longitude: 127.0286,
+        radiusMeters: 900
+      }
+    });
+    assert.equal(externalMaps.isError, undefined);
+    const externalMapsStructured = externalMaps.structuredContent as {
+      provider: string; status: string; coarseLatitude: number; coarseLongitude: number; policy: string;
+    };
+    assert.equal(externalMapsStructured.provider, "unavailable");
+    assert.equal(externalMapsStructured.status, "not_configured");
+    assert.equal(externalMapsStructured.coarseLatitude, 37.27);
+    assert.equal(externalMapsStructured.coarseLongitude, 127.03);
+    assert.match(externalMapsStructured.policy, /data\.go\.kr/u);
 
     const calculation = await client.callTool({
       name: "calculate_best_discount",
@@ -113,8 +137,7 @@ try {
           minimumOrderAmount: 5_000,
           combinableWithCard: true,
           referencePrice: 5_100
-        }],
-        benefitRules: []
+        }]
       }
     });
     assert.equal(calculation.isError, undefined);
@@ -144,8 +167,7 @@ try {
           discountValue: 500,
           minimumOrderAmount: 0,
           combinableWithCard: false
-        }],
-        benefitRules: []
+        }]
       }
     });
     assert.equal(unknownProperty.isError, true);
@@ -167,14 +189,13 @@ try {
           discountValue: 101,
           minimumOrderAmount: 0,
           combinableWithCard: false
-        }],
-        benefitRules: []
+        }]
       }
     });
     assert.equal(invalidPercentage.isError, true);
     assert.match(errorText(invalidPercentage), /percentage discountValue/u);
 
-    const unscopedBenefitRule = await client.callTool({
+    const injectedBenefitRule = await client.callTool({
       name: "calculate_best_discount",
       arguments: {
         storeId: "twosome-suwon",
@@ -198,8 +219,8 @@ try {
         }]
       }
     });
-    assert.equal(unscopedBenefitRule.isError, true);
-    assert.match(errorText(unscopedBenefitRule), /eligibleStoreKeywords/u);
+    assert.equal(injectedBenefitRule.isError, true);
+    assert.match(errorText(injectedBenefitRule), /unrecognized key/iu, "Agents must not inject a calculator rule");
 
     const unknownTool = await client.callTool({ name: "redeem_coupon_without_user", arguments: {} });
     assert.equal(unknownTool.isError, true);

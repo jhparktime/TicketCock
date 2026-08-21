@@ -89,8 +89,9 @@ struct AgentAPIService {
     }
 
     func fetchRecommendation(for store: Store, expectedPrice: Int, profile: UserProfile, coupons: [Coupon]) async throws -> Recommendation {
-        // 배포 전에도 화면 흐름을 검증할 수 있는 데모 응답입니다.
-        guard !baseURL.absoluteString.contains("REPLACE_ME") else { return .preview }
+        guard !baseURL.absoluteString.contains("REPLACE_ME") else {
+            throw URLError(.badURL)
+        }
 
         var request = try await authenticatedRequest(url: baseURL.appendingPathComponent("v1/recommendations"), method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -111,6 +112,23 @@ struct AgentAPIService {
         guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else { throw URLError(.badServerResponse) }
         return try JSONDecoder().decode(CouponNormalizationResponse.self, from: data).coupon
     }
+
+    /// Calls Gemini with device-redacted OCR text plus a front visual signature. The signature is
+    /// a re-rendered image where all Vision-detected text and the lower sensitive half are blacked
+    /// out, and it is rejected on-device if Vision can still read text. The back never leaves iOS.
+    func recognizeCardProduct(_ payload: SafeCardRecognitionPayload) async throws -> CardMultimodalRecognition {
+        var request = try await authenticatedRequest(url: baseURL.appendingPathComponent("v1/cards/recognize"), method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(CardRecognitionRequest(
+            frontText: payload.frontText,
+            backText: payload.backText,
+            frontVisualSignatureBase64: payload.frontVisualSignatureBase64,
+            userApprovedCloudAnalysis: true
+        ))
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else { throw URLError(.badServerResponse) }
+        return try JSONDecoder().decode(CardRecognitionResponse.self, from: data).recognition
+    }
 }
 
 private struct NearbyStoreResponse: Decodable {
@@ -119,6 +137,17 @@ private struct NearbyStoreResponse: Decodable {
 
 private struct CouponNormalizationResponse: Decodable {
     let coupon: CouponNormalization
+}
+
+private struct CardRecognitionRequest: Encodable {
+    let frontText: String
+    let backText: String
+    let frontVisualSignatureBase64: String
+    let userApprovedCloudAnalysis: Bool
+}
+
+private struct CardRecognitionResponse: Decodable {
+    let recognition: CardMultimodalRecognition
 }
 
 private struct NearbyStore: Decodable {

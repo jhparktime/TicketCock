@@ -33,6 +33,24 @@ paths:
         jwt_audience: https://coupon-pilot-api-akcfigyefa-du.a.run.app
         path_translation: APPEND_PATH_TO_ADDRESS
       responses: {"200": {description: OK}}
+  /v1/cards/recognize:
+    post:
+      operationId: recognizeSanitizedCard
+      description: >-
+        Explicitly consented Gemini catalog classification. Accepts secret-free iOS OCR plus only
+        a front visual signature whose text and lower sensitive half were pixel-masked and Vision
+        rechecked on device. DLP redacts all text once more before Gemini. Original card photos,
+        the back image, PAN, expiry and CVC are rejected.
+      security: [{firebase: []}]
+      x-google-backend:
+        address: https://coupon-pilot-api-akcfigyefa-du.a.run.app
+        jwt_audience: https://coupon-pilot-api-akcfigyefa-du.a.run.app
+        path_translation: APPEND_PATH_TO_ADDRESS
+        deadline: 30.0
+      responses:
+        "200": {description: User-confirmable allowlisted card product and official source links}
+        "400": {description: Sensitive or malformed card recognition input}
+        "503": {description: Vertex card recognition is not configured}
   /v1/benefits/search:
     get:
       operationId: searchBenefits

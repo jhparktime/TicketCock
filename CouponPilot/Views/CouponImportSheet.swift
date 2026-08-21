@@ -22,19 +22,19 @@ struct CouponImportSheet: View {
 
                     if isRecognizing {
                         HStack(spacing: 12) {
-                            ProgressView().tint(.cyan)
+                            ProgressView().tint(AppPalette.accent)
                             Text("기기에서 쿠폰을 읽고 AI가 초안을 정리하는 중이에요")
                                 .font(.subheadline.weight(.medium))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(18)
-                        .background(.cyan.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .background(AppPalette.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     }
 
                     if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                             .font(.subheadline)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AppPalette.warning)
                     }
 
                     if previewImage != nil, !isRecognizing {
@@ -83,8 +83,8 @@ struct CouponImportSheet: View {
         return PhotosPicker(selection: $selectedItem, matching: .images) {
             ZStack {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.blue.opacity(0.11))
-                    .overlay { RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.blue.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [7])) }
+                    .fill(.thinMaterial)
+                    .overlay { RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(AppPalette.accent.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [7])) }
                 if let displayedImage {
                     Image(uiImage: displayedImage)
                         .resizable()
@@ -104,7 +104,7 @@ struct CouponImportSheet: View {
                     VStack(spacing: 10) {
                         Image(systemName: "photo.badge.plus")
                             .font(.system(size: 34, weight: .medium))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(AppPalette.accent)
                         Text("쿠폰 이미지 선택")
                             .font(.headline)
                         Text("스크린샷이나 사진을 골라주세요")
@@ -134,7 +134,7 @@ struct CouponImportSheet: View {
             if usedAINormalization {
                 Label(draft.requiresConfirmation ? "AI 초안 · 할인 조건을 확인해 주세요" : "AI가 OCR 초안을 정리했어요", systemImage: draft.requiresConfirmation ? "exclamationmark.triangle.fill" : "sparkles")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(draft.requiresConfirmation ? .orange : .mint)
+                    .foregroundStyle(draft.requiresConfirmation ? AppPalette.warning : AppPalette.accent)
             }
             TextField("쿠폰 이름", text: $draft.title, axis: .vertical)
                 .lineLimit(2...3)
@@ -200,7 +200,7 @@ struct CouponImportSheet: View {
                 Spacer()
                 Text("저장되지 않음")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(.mint)
+                    .foregroundStyle(AppPalette.accent)
             }
             Text(rawText.isEmpty ? "읽을 수 있는 문구가 없습니다." : rawText)
                 .font(.caption.monospaced())

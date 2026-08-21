@@ -14,9 +14,11 @@ A document is not production evidence merely because it has an embedding. The re
 
 Retrieval accepts only `active` and non-stale chunks. A corrupt stored rule is rejected again when the index is loaded. The raw text is content-hashed; the immutable version is part of both the object path and chunk ID. Retired documents remain as audit tombstones but are excluded from retrieval and Calculator input immediately.
 
-`ingest:benefit` is a **candidate submission**. It saves the reviewed, immutable snapshot and
-its SHA-256 to the private candidate area only. It does not create embeddings, update the live
-index, or affect Calculator output.
+`ingest:benefit` is a **candidate submission**. It retrieves the official URL again, follows
+only allowlisted provider redirects, and saves the raw HTML/PDF response, content type, retrieval
+time, final URL, and SHA-256 in the private candidate area alongside the reviewer-authored
+structured extraction. It does not create embeddings, update the live index, or affect Calculator
+output. Approval re-hashes that exact source object; a missing or altered snapshot fails closed.
 
 Example candidate submission:
 

@@ -83,11 +83,13 @@ def build_root_agent() -> SequentialAgent:
         instruction="""
 사용자 요청에서 storeId, storeName, 좌표를 확인하세요.
 좌표가 있으면 반드시 search_nearby_stores를 호출해 수원시 지원 프랜차이즈인지 확인하세요.
+매장명과 좌표가 있으면 verify_store_with_external_maps도 한 번 호출하세요. 이 도구는 정밀 위치를 외부에 보내지 않고 0.01도 격자·매장명만 Google Maps 공식 MCP에 전달하며, 실패 시 카카오 공식 Local API를 사용합니다.
+외부 지도 결과는 보조 근거일 뿐입니다. data.go.kr 매장 원본을 대체하지 말고, unavailable이면 추정하지 마세요.
 좌표가 없으면 제공된 storeName을 그대로 사용하고 위치가 미검증임을 표시하세요.
 쿠폰·바코드·사용자 식별자를 도구에 전달하지 마세요.
 결과는 짧은 JSON으로만 반환하세요.
 """,
-        tools=[_mcp_toolset("search_nearby_stores")],
+        tools=[_mcp_toolset("search_nearby_stores", "verify_store_with_external_maps")],
         before_tool_callback=validate_tool_call,
         generate_content_config=_generation_config(500),
         output_key="store_context",
@@ -116,7 +118,7 @@ def build_root_agent() -> SequentialAgent:
 사용자의 통신사·등급·등록 카드 상품과 매장명으로 retrieve_carrier_benefits를 반드시 한 번 호출하세요. 등록 카드가 있으면 profile.cards의 productName만 cardProducts에 넣으세요.
 등록 카드의 카드번호·만료일·CVC·결제내역을 도구에 전달하지 마세요. 상품명, 전월 실적 충족 여부, 남은 월 혜택 한도만 사용할 수 있습니다.
 도구 결과의 공식 sourceURL과 rule만 사용하고, rule이 없는 혜택의 금액을 추정하지 마세요.
-계산 가능한 benefitRules와 참고용 sources를 분리한 JSON으로 반환하세요.
+공식 sourceURL과 적용 조건을 참고용 근거로 정리하세요. 계산 규칙은 다음 단계에 전달하지 않으며 Calculator Tool이 공식 색인에서 직접 재조회합니다.
 매장 맥락: {store_context}
 쿠폰 맥락: {coupon_context}
 """,
@@ -132,7 +134,7 @@ def build_root_agent() -> SequentialAgent:
         description="결정론적 계산 결과를 보존해 최종 추천을 설명하는 전문 에이전트",
         instruction="""
 calculate_best_discount를 반드시 호출해 최종가·절약액·순위를 확정하세요.
-쿠폰 입력은 coupon_context에서, 공식 통신사·카드 규칙은 benefit_context의 benefitRules에서 가져오세요.
+쿠폰 입력은 coupon_context에서 가져오세요. 공식 통신사·카드 할인 규칙은 절대 도구 인자로 전달하거나 재작성하지 마세요. Calculator Tool이 활성·승인된 공식 RAG 문서에서 직접 재조회합니다.
 도구가 반환한 금액·순위·중복 가능 여부를 절대 수정하거나 다시 계산하지 마세요.
 최종 응답은 recommendedOption, alternatives, explanation, benefitSources를 포함한 JSON으로 반환하세요.
 공식 근거가 없으면 benefitSources를 빈 배열로 두고 그 사실을 explanation에 명시하세요.

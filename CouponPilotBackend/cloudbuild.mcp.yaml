@@ -1,0 +1,13 @@
+# Builds the private MCP image. Kept separate because the API Dockerfile starts
+# the public HTTP API while this image starts the internal MCP transport.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.mcp
+      - -t
+      - asia-northeast3-docker.pkg.dev/${PROJECT_ID}/couponcok/couponcok-mcp:${_IMAGE_TAG}
+      - .
+images:
+  - asia-northeast3-docker.pkg.dev/${PROJECT_ID}/couponcok/couponcok-mcp:${_IMAGE_TAG}

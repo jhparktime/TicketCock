@@ -71,4 +71,7 @@ const result = await submitOfficialBenefitCandidate({
     limitations: commaValues("--limitations") ?? []
   }
 }, reviewer);
-console.log(JSON.stringify(result));
+console.log(JSON.stringify({
+  ...result,
+  nextStep: "An independent reviewer must inspect sourceSnapshotObject and run approve:benefit."
+}));
