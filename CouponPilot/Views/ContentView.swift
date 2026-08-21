@@ -1503,12 +1503,7 @@ struct BrandLogo: View {
     private var logoImage: some View {
         switch franchise {
         case .starbucks:
-            Image("BrandStarbucks")
-                .resizable()
-                .scaledToFit()
-                .colorInvert()
-                .luminanceToAlpha()
-                .foregroundStyle(Color(red: 0.00, green: 0.44, blue: 0.29))
+            Image("BrandStarbucks").resizable().scaledToFit()
         case .baskinrobbins:
             Image("BrandBaskinRobbins").resizable().scaledToFit()
         case .twosome:
