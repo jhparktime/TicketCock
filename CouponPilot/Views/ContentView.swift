@@ -609,14 +609,7 @@ struct ContentView: View {
 
     private func couponCard(_ coupon: Coupon) -> some View {
         HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(AppPalette.couponBlue)
-                Image(systemName: "ticket.fill")
-                    .font(.system(size: 23, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-            .frame(width: 54, height: 64)
+            BrandLogo(brand: coupon.brand, size: 54)
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(coupon.title)
@@ -706,9 +699,7 @@ struct ContentView: View {
                         CouponDetailView(coupon: coupon)
                     } label: {
                         HStack(spacing: 13) {
-                            Image(systemName: "ticket.fill")
-                                .foregroundStyle(AppPalette.accent)
-                                .frame(width: 30)
+                            BrandLogo(brand: coupon.brand, size: 36)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(coupon.title).font(.headline)
                                 Text("\(coupon.brand) · \(coupon.expiresAt.formatted(date: .abbreviated, time: .omitted))까지")
@@ -1447,6 +1438,62 @@ private struct LiquidBackground: View {
             endPoint: .bottom
         )
             .ignoresSafeArea()
+    }
+}
+
+private struct BrandLogo: View {
+    let brand: String
+    let size: CGFloat
+
+    private var franchise: SupportedFranchise? {
+        SupportedFranchise.detected(in: brand)
+    }
+
+    var body: some View {
+        Group {
+            switch franchise {
+            case .starbucks:
+                Image("BrandStarbucks")
+                    .resizable()
+                    .scaledToFit()
+                    // The supplied Starbucks image contains a light checkerboard background.
+                    // Converting it to a template keeps the mark legible at the small card size.
+                    .colorInvert()
+                    .luminanceToAlpha()
+                    .foregroundStyle(Color(red: 0.00, green: 0.44, blue: 0.29))
+                    .padding(size * 0.11)
+            case .baskinrobbins:
+                Image("BrandBaskinRobbins")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(size * 0.06)
+            case .twosome:
+                Image("BrandTwosomePlace")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(size * 0.12)
+            default:
+                Image(systemName: "ticket.fill")
+                    .font(.system(size: size * 0.40, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(AppPalette.couponBlue, in: RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+            }
+        }
+        .frame(width: size, height: size)
+        .background {
+            if franchise != nil {
+                RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                    .fill(.white)
+            }
+        }
+        .overlay {
+            if franchise != nil {
+                RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                    .stroke(AppPalette.border, lineWidth: 1)
+            }
+        }
+        .accessibilityLabel("\(brand) 로고")
     }
 }
 
