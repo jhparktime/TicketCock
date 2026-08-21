@@ -8,57 +8,74 @@ struct CouponDetailView: View {
     @State private var showUseConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var showEditor = false
+    @State private var showCouponViewer = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                couponHeader
-                couponImage
+            VStack(alignment: .leading, spacing: 26) {
+                CouponPassCard(coupon: coupon)
 
-                VStack(spacing: 0) {
-                    detailRow("유효기간", value: coupon.expiresAt.formatted(date: .long, time: .omitted))
-                    Divider()
-                    detailRow("최소 주문금액", value: coupon.minimumOrderAmount == 0 ? "없음" : "\(coupon.minimumOrderAmount.formatted())원")
-                    Divider()
-                    detailRow("카드 혜택 중복", value: coupon.combinableWithCard ? "가능" : "불가")
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(coupon.title)
+                        .font(.system(size: 25, weight: .bold))
+                        .foregroundStyle(AppPalette.ink)
+                    Text(couponBenefitDescription)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(couponPassColor)
                 }
-                .padding(.horizontal, 16)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 14) {
+                    detailLine(icon: "clock", tint: coupon.daysUntilExpiry <= 3 ? AppPalette.warning : AppPalette.muted, title: expiryDescription)
+                    detailLine(icon: "cart", tint: AppPalette.muted, title: coupon.minimumOrderAmount == 0 ? "최소 구매금액 없이 사용할 수 있어요" : "\(coupon.minimumOrderAmount.formatted())원 이상 구매 시 사용할 수 있어요")
+                    detailLine(icon: coupon.combinableWithCard ? "checkmark.circle" : "minus.circle", tint: coupon.combinableWithCard ? AppPalette.accent : AppPalette.muted, title: coupon.combinableWithCard ? "카드 혜택과 함께 사용할 수 있어요" : "카드 혜택과 중복 사용할 수 없어요")
+                }
+
+                if !coupon.conditions.isEmpty {
+                    VStack(alignment: .leading, spacing: 11) {
+                        Text("사용 조건")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(AppPalette.ink)
+                        ForEach(coupon.conditions, id: \.self) { condition in
+                            HStack(alignment: .top, spacing: 8) {
+                                Circle()
+                                    .fill(AppPalette.muted.opacity(0.65))
+                                    .frame(width: 4, height: 4)
+                                    .padding(.top, 7)
+                                Text(condition)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(AppPalette.muted)
+                            }
+                        }
+                    }
+                }
 
                 if coupon.localImageFilename != nil {
-                    Label("쿠폰 이미지는 이 기기에만 보관됩니다", systemImage: "lock.shield.fill")
+                    Label("등록한 쿠폰 원본은 이 기기에만 보관됩니다", systemImage: "lock.shield.fill")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppPalette.muted)
                 }
-
-                HStack(spacing: 12) {
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 24)
+        }
+        .background(AppPalette.topCanvas)
+        .navigationTitle(coupon.brand)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
                     Button { showEditor = true } label: {
                         Label("쿠폰 수정", systemImage: "pencil")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
                     }
-                    .buttonStyle(.bordered)
-
-                    Button(role: .destructive) { showDeleteConfirmation = true } label: {
-                        Label("삭제", systemImage: "trash")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
-                    }
-                    .buttonStyle(.bordered)
+                } label: {
+                    Image(systemName: "ellipsis")
                 }
-
-                Button(role: .destructive) { showUseConfirmation = true } label: {
-                    Label("결제 후 사용 처리", systemImage: "checkmark.seal.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
-                }
-                .buttonStyle(.bordered)
             }
-            .padding(20)
         }
-        .navigationTitle("쿠폰 상세")
-        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            actionBar
+        }
         .confirmationDialog("결제가 완료되었나요?", isPresented: $showUseConfirmation, titleVisibility: .visible) {
             Button("결제 완료 · 사용 처리", role: .destructive) {
                 appState.markCouponUsed(coupon)
@@ -82,43 +99,173 @@ struct CouponDetailView: View {
                 appState.updateCoupon(updatedCoupon)
             }
         }
+        .sheet(isPresented: $showCouponViewer) {
+            CouponViewerSheet(coupon: coupon)
+        }
     }
 
-    private var couponHeader: some View {
-        HStack(alignment: .center, spacing: 15) {
-            BrandLogo(brand: coupon.brand, size: 72)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(coupon.brand.uppercased())
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                Text(coupon.title)
-                    .font(.title2.weight(.bold))
-                Text(coupon.discountType == .percentage ? "제조 음료 \(coupon.discountValue)% 할인" : "\(coupon.discountValue.formatted())원 할인")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(AppPalette.accent)
+    private var actionBar: some View {
+        VStack(spacing: 10) {
+            Button {
+                showCouponViewer = true
+            } label: {
+                Label("쿠폰 보기", systemImage: "ticket.fill")
+                    .font(.system(size: 17, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 58)
+            }
+            .buttonStyle(CouponPrimaryButtonStyle())
+
+            HStack(spacing: 10) {
+                Button("사용 완료") { showUseConfirmation = true }
+                    .buttonStyle(CouponSecondaryButtonStyle())
+                Button("삭제", role: .destructive) { showDeleteConfirmation = true }
+                    .buttonStyle(CouponSecondaryButtonStyle())
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(.white.opacity(0.96))
+        .overlay(alignment: .top) { Divider().overlay(AppPalette.border) }
+    }
+
+    private var couponBenefitDescription: String {
+        if coupon.discountType == .percentage {
+            return coupon.maximumDiscount.map { "\(coupon.discountValue)% 할인 · 최대 \($0.formatted())원" } ?? "\(coupon.discountValue)% 할인"
+        }
+        return "\(coupon.discountValue.formatted())원 할인"
+    }
+
+    private var expiryDescription: String {
+        if coupon.daysUntilExpiry == 0 { return "오늘 만료되는 쿠폰이에요" }
+        return "\(coupon.daysUntilExpiry)일 후 만료 · \(coupon.expiresAt.formatted(date: .long, time: .omitted))까지"
+    }
+
+    private var couponPassColor: Color {
+        CouponPassCard.color(for: coupon.brand)
+    }
+
+    private func detailLine(icon: String, tint: Color, title: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(tint)
+                .frame(width: 20)
+            Text(title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(AppPalette.muted)
+        }
+    }
+}
+
+private struct CouponPassCard: View {
+    let coupon: Coupon
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 11) {
+                BrandLogo(brand: coupon.brand, size: 50)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(coupon.brand)
+                        .font(.system(size: 16, weight: .bold))
+                    Text(coupon.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .opacity(0.80)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Text(coupon.daysUntilExpiry == 0 ? "오늘 만료" : "\(coupon.daysUntilExpiry)일 후 만료")
+                    .font(.system(size: 13, weight: .bold))
+                    .opacity(0.82)
+            }
+
+            Spacer()
+
+            Text(coupon.title)
+                .font(.system(size: 27, weight: .bold))
+                .lineLimit(2)
+            Text(coupon.discountType == .percentage ? "\(coupon.discountValue)% 할인" : "\(coupon.discountValue.formatted())원 할인")
+                .font(.system(size: 16, weight: .semibold))
+                .padding(.top, 6)
+                .opacity(0.88)
+        }
+        .foregroundStyle(.white)
+        .padding(20)
+        .frame(maxWidth: .infinity, minHeight: 248, alignment: .leading)
+        .background(Self.color(for: coupon.brand), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    static func color(for brand: String) -> Color {
+        switch SupportedFranchise.detected(in: brand) {
+        case .starbucks: Color(red: 0.00, green: 0.44, blue: 0.29)
+        case .twosome: Color(red: 0.10, green: 0.11, blue: 0.13)
+        case .baskinrobbins: Color(red: 0.82, green: 0.24, blue: 0.52)
+        case .parisbaguette: Color(red: 0.04, green: 0.31, blue: 0.63)
+        case .touslesjours: Color(red: 0.02, green: 0.38, blue: 0.25)
+        case .ediya: Color(red: 0.04, green: 0.28, blue: 0.56)
+        case .ashleyqueens: Color(red: 0.25, green: 0.24, blue: 0.23)
+        case .hollys: Color(red: 0.74, green: 0.06, blue: 0.12)
+        default: AppPalette.accent
+        }
+    }
+}
+
+private struct CouponViewerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let coupon: Coupon
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let image = CouponImageStore.shared.image(named: coupon.localImageFilename) {
+                    ScrollView {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .padding(20)
+                    }
+                } else {
+                    VStack(spacing: 18) {
+                        CouponPassCard(coupon: coupon)
+                        Text("등록된 쿠폰 원본 이미지가 없어요")
+                            .font(.subheadline)
+                            .foregroundStyle(AppPalette.muted)
+                    }
+                    .padding(20)
+                }
+            }
+            .background(AppPalette.topCanvas)
+            .navigationTitle("쿠폰 보기")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("닫기") { dismiss() }
+                }
             }
         }
     }
+}
 
-    @ViewBuilder
-    private var couponImage: some View {
-        if let image = CouponImageStore.shared.image(named: coupon.localImageFilename) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .overlay { RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(.primary.opacity(0.08), lineWidth: 1) }
-        }
+private struct CouponPrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.white)
+            .background(AppPalette.accent, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
+}
 
-    private func detailRow(_ title: String, value: String) -> some View {
-        HStack {
-            Text(title).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).fontWeight(.semibold)
-        }
-        .padding(.vertical, 15)
+private struct CouponSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 16, weight: .bold))
+            .foregroundStyle(AppPalette.ink)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(AppPalette.canvas, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
