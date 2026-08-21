@@ -1453,45 +1453,34 @@ struct BrandLogo: View {
         SupportedFranchise.detected(in: brand)
     }
 
+    private var visualScale: CGFloat {
+        switch franchise {
+        case .starbucks: 1.18
+        case .baskinrobbins: 1.82
+        case .twosome: 1.56
+        case .parisbaguette: 1.08
+        case .touslesjours: 1.06
+        case .ediya: 1.42
+        case .ashleyqueens: 1.20
+        case .hollys: 1.48
+        default: 1
+        }
+    }
+
     var body: some View {
-        Group {
-            switch franchise {
-            case .starbucks:
-                Image("BrandStarbucks")
-                    .resizable()
-                    .scaledToFit()
-                    // The supplied Starbucks image contains a light checkerboard background.
-                    // Converting it to a template keeps the mark legible at the small card size.
-                    .colorInvert()
-                    .luminanceToAlpha()
-                    .foregroundStyle(Color(red: 0.00, green: 0.44, blue: 0.29))
-                    .padding(size * 0.11)
-            case .baskinrobbins:
-                Image("BrandBaskinRobbins")
-                    .resizable()
-                    .scaledToFit()
-                    .padding(size * 0.06)
-            case .twosome:
-                Image("BrandTwosomePlace")
-                    .resizable()
-                    .scaledToFit()
-                    .padding(size * 0.12)
-            case .parisbaguette:
-                Image("BrandParisBaguette")
-                    .resizable()
-                    .scaledToFit()
-                    .padding(size * 0.08)
-            case .touslesjours:
-                Image("BrandTousLesJours")
-                    .resizable()
-                    .scaledToFit()
-                    .padding(size * 0.08)
-            default:
+        ZStack {
+            if franchise == nil {
                 Image(systemName: "ticket.fill")
                     .font(.system(size: size * 0.40, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(AppPalette.couponBlue, in: RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+            } else {
+                logoImage
+                    .frame(width: size * 0.68, height: size * 0.68)
+                    .scaleEffect(visualScale)
+                    .frame(width: size, height: size)
+                    .clipped()
             }
         }
         .frame(width: size, height: size)
@@ -1508,6 +1497,45 @@ struct BrandLogo: View {
             }
         }
         .accessibilityLabel("\(brand) 로고")
+    }
+
+    @ViewBuilder
+    private var logoImage: some View {
+        switch franchise {
+        case .starbucks:
+            Image("BrandStarbucks")
+                .resizable()
+                .scaledToFit()
+                .colorInvert()
+                .luminanceToAlpha()
+                .foregroundStyle(Color(red: 0.00, green: 0.44, blue: 0.29))
+        case .baskinrobbins:
+            Image("BrandBaskinRobbins").resizable().scaledToFit()
+        case .twosome:
+            Image("BrandTwosomePlace").resizable().scaledToFit()
+        case .parisbaguette:
+            Image("BrandParisBaguette").resizable().scaledToFit()
+        case .touslesjours:
+            Image("BrandTousLesJours").resizable().scaledToFit()
+        case .ediya:
+            Image("BrandEdiya")
+                .resizable()
+                .scaledToFit()
+                .colorInvert()
+                .luminanceToAlpha()
+                .foregroundStyle(Color(red: 0.04, green: 0.28, blue: 0.56))
+        case .ashleyqueens:
+            Image("BrandAshleyQueens")
+                .resizable()
+                .scaledToFit()
+                .colorInvert()
+                .luminanceToAlpha()
+                .foregroundStyle(AppPalette.ink)
+        case .hollys:
+            Image("BrandHollysCoffee").resizable().scaledToFit()
+        default:
+            EmptyView()
+        }
     }
 }
 
