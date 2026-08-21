@@ -276,7 +276,7 @@ struct ContentView: View {
     private var topBar: some View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("김우리님")
+                Text("김철수님")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .underline()
@@ -440,11 +440,6 @@ struct ContentView: View {
                 .buttonStyle(WooriPrimaryButtonStyle())
                 .disabled(appState.isLoadingRecommendation || matchingCoupons.isEmpty)
 
-                HStack(spacing: 12) {
-                    heroMetric(value: appState.recommendation?.storeName == store.name ? "\(appState.recommendation!.recommendedOption.savings.formatted())원" : "\(matchingCoupons.count)장", label: appState.recommendation?.storeName == store.name ? "계산된 절약" : "매칭 쿠폰")
-                    Divider().overlay(AppPalette.border)
-                    heroMetric(value: appState.recommendation?.storeName == store.name ? "\(appState.recommendation!.recommendedOption.finalPrice.formatted())원" : "\(store.radiusMeters.formatted(.number.precision(.fractionLength(0))))m", label: appState.recommendation?.storeName == store.name ? "예상 결제" : "매장 거리")
-                }
             } else {
                 Text(AppState.isSubmissionSimulation ? "투썸플레이스에서\n쿠폰을 비교해 볼까요?" : "매장에 들어가면\n혜택을 알려드릴게요")
                     .font(.system(size: 27, weight: .bold))
@@ -513,18 +508,6 @@ struct ContentView: View {
     private func storeRecommendationButtonTitle(for store: Store) -> String {
         if store.name.contains("투썸") { return "투썸 혜택 추천받기" }
         return "\(store.name) 혜택 추천받기"
-    }
-
-    private func heroMetric(value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(value)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(AppPalette.ink)
-            Text(label)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(AppPalette.muted)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var quickCouponSection: some View {
