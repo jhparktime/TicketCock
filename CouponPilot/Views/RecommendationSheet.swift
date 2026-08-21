@@ -62,7 +62,7 @@ struct RecommendationSheet: View {
                 Image(systemName: "checkmark.seal.fill")
                 Text("계산 결과")
                 Text("·")
-                Text("Calculator Tool")
+                Text("공식 조건 반영")
             }
             .font(.caption.weight(.bold))
             .foregroundStyle(AppPalette.accent)

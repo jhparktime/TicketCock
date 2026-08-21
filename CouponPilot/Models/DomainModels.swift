@@ -1,10 +1,11 @@
 import Foundation
 import CoreLocation
 
-/// 위치 기반 추천을 지원하는 카페·음료·외식 프랜차이즈입니다.
+/// 위치 기반 추천을 지원하는 카페·외식·편의점 프랜차이즈입니다.
 enum SupportedFranchise: String, CaseIterable, Identifiable, Hashable {
     case starbucks, twosome, mega, ediya, compose, paiks, hollys, coffeebean, gongcha, theventi
     case baskinrobbins, parisbaguette, touslesjours, ashleyqueens
+    case cu, gs25, seveneleven, emart24
 
     var id: String { rawValue }
     var displayName: String {
@@ -23,6 +24,17 @@ enum SupportedFranchise: String, CaseIterable, Identifiable, Hashable {
         case .parisbaguette: "파리바게뜨"
         case .touslesjours: "뚜레쥬르"
         case .ashleyqueens: "애슐리 퀸즈"
+        case .cu: "CU"
+        case .gs25: "GS25"
+        case .seveneleven: "세븐일레븐"
+        case .emart24: "이마트24"
+        }
+    }
+
+    var storeCategory: String {
+        switch self {
+        case .cu, .gs25, .seveneleven, .emart24: "편의점"
+        default: "카페·외식"
         }
     }
 
@@ -42,6 +54,10 @@ enum SupportedFranchise: String, CaseIterable, Identifiable, Hashable {
         case .parisbaguette: ["파리바게뜨", "파리바게트", "parisbaguette"]
         case .touslesjours: ["뚜레쥬르", "touslesjours"]
         case .ashleyqueens: ["애슐리퀸즈", "애슐리 퀸즈", "ashleyqueens", "ashley"]
+        case .cu: ["cu", "씨유", "bgf리테일", "bgfretail"]
+        case .gs25: ["gs25", "지에스25", "gs리테일", "gsretail"]
+        case .seveneleven: ["세븐일레븐", "7eleven", "seveneleven", "코리아세븐"]
+        case .emart24: ["이마트24", "emart24", "이마트이십사"]
         }
     }
 
@@ -77,13 +93,18 @@ struct Store: Identifiable, Codable, Hashable {
     )
 }
 
-enum SuwonScope {
-    static let displayName = "수원시"
-    // Cloud Run도 같은 범위를 검사해 수원 외 매장을 앱에 반환하지 않습니다.
-    static let minimumLatitude = 37.18
-    static let maximumLatitude = 37.34
-    static let minimumLongitude = 126.90
-    static let maximumLongitude = 127.15
+enum KoreaScope {
+    static let displayName = "대한민국"
+    // Cloud Run과 같은 범위를 사용해 해외 좌표를 공공 매장 API와 외부 지도 도구에 전달하지 않습니다.
+    static let minimumLatitude = 33.0
+    static let maximumLatitude = 39.1
+    static let minimumLongitude = 124.0
+    static let maximumLongitude = 132.0
+
+    static func contains(_ coordinate: CLLocationCoordinate2D) -> Bool {
+        minimumLatitude...maximumLatitude ~= coordinate.latitude
+            && minimumLongitude...maximumLongitude ~= coordinate.longitude
+    }
 }
 
 struct Coupon: Identifiable, Codable, Hashable {

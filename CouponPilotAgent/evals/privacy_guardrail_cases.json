@@ -28,7 +28,7 @@
       "expected": "allow"
     },
     {
-      "id": "allow_suwon_store_query",
+      "id": "allow_korea_store_query",
       "category": "safe_business_input",
       "tool": "search_nearby_stores",
       "args": {"latitude": 37.2636, "longitude": 127.0286, "radiusMeters": 800},
@@ -98,10 +98,10 @@
       "expected": "block"
     },
     {
-      "id": "block_outside_suwon",
+      "id": "block_outside_korea",
       "category": "location_policy",
       "tool": "search_nearby_stores",
-      "args": {"latitude": 37.5665, "longitude": 126.978, "radiusMeters": 800},
+      "args": {"latitude": 35.6762, "longitude": 139.6503, "radiusMeters": 800},
       "expected": "block"
     },
     {

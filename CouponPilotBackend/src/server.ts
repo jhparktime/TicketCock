@@ -28,6 +28,8 @@ export const app = express();
 app.use(express.json({ limit: "256kb" }));
 app.use(traceHttpRequest);
 
+/** South Korea operating boundary. Coordinates outside this range are never forwarded to public-data or map providers. */
+export const KOREA_BOUNDS = { minLat: 33.0, maxLat: 39.1, minLon: 124.0, maxLon: 132.0 };
 const SUWON_BOUNDS = { minLat: 37.18, maxLat: 37.34, minLon: 126.90, maxLon: 127.15 };
 const DATA_GO_KR_BASE_URL = "https://apis.data.go.kr/B553077/api/open/sdsc2/storeListInRadius";
 const GEMINI_MODEL = "gemini-2.5-flash";
@@ -40,16 +42,19 @@ const DATA_GO_REQUEST_TIMEOUT_MS = 6_000;
  * Public-data provenance is part of the recommendation contract. The client and MCP Agent may
  * cite this metadata, but it must never turn a public store listing into a discount claim.
  */
-export const SUWON_STORE_DATA_SOURCE = Object.freeze({
+export const KOREA_STORE_DATA_SOURCE = Object.freeze({
   id: "data.go.kr",
   datasetId: "15012005",
   title: "소상공인시장진흥공단_상가(상권)정보_API",
   officialURL: "https://www.data.go.kr/data/15012005/openapi.do",
   apiVersion: "sdsc2",
-  scope: "수원시",
+  scope: "대한민국",
   refreshPolicy: "live-query with 10-minute server cache",
   usage: "store-identification-only"
 });
+
+/** Kept for the pre-warmed Suwon directory job; request-time APIs use KOREA_STORE_DATA_SOURCE. */
+export const SUWON_STORE_DATA_SOURCE = Object.freeze({ ...KOREA_STORE_DATA_SOURCE, scope: "수원시" });
 
 type PublicStore = {
   bizesId: string; bizesNm: string; brchNm?: string; indsLclsNm?: string; indsMclsNm?: string;
@@ -334,13 +339,17 @@ function isWithinSuwon(lat: number, lon: number) {
   return lat >= SUWON_BOUNDS.minLat && lat <= SUWON_BOUNDS.maxLat && lon >= SUWON_BOUNDS.minLon && lon <= SUWON_BOUNDS.maxLon;
 }
 
+export function isWithinKorea(lat: number, lon: number) {
+  return lat >= KOREA_BOUNDS.minLat && lat <= KOREA_BOUNDS.maxLat && lon >= KOREA_BOUNDS.minLon && lon <= KOREA_BOUNDS.maxLon;
+}
+
 function filterStoresByQuery(stores: ReturnedStore[], query?: string) {
   const normalizedQuery = query?.trim().toLocaleLowerCase("ko-KR");
   return stores.filter((store) => !normalizedQuery || store.name.toLocaleLowerCase("ko-KR").includes(normalizedQuery));
 }
 
 /**
- * Firestore `storeDirectories` is the durable Suwon store table. The in-memory cache only
+ * Firestore `storeDirectories` is a per-area durable store cache. The in-memory cache only
  * avoids a round-trip inside a warm Cloud Run instance; the table survives a new revision.
  * A missing IAM role deliberately degrades to live data.go.kr lookup rather than preventing
  * a store-entry recommendation.
@@ -362,9 +371,9 @@ async function savePersistedStoreDirectory(cacheKey: string, stores: ReturnedSto
   try {
     if (!getApps().length) initializeApp();
     await getFirestore().collection("storeDirectories").doc(cacheKey).set({
-      region: "수원시",
-      source: SUWON_STORE_DATA_SOURCE.id,
-      sourceMetadata: SUWON_STORE_DATA_SOURCE,
+      region: "대한민국",
+      source: KOREA_STORE_DATA_SOURCE.id,
+      sourceMetadata: KOREA_STORE_DATA_SOURCE,
       updatedAtMillis: Date.now(),
       expiresAtMillis,
       stores
@@ -583,13 +592,15 @@ async function recognizeSanitizedCard(input: z.infer<typeof cardRecognitionReque
   };
 }
 
-/** 공공데이터 키를 Cloud Run에서만 사용해 수원시 매장을 반환합니다. */
+/** 공공데이터 키를 Cloud Run에서만 사용해 전국 현재 위치 주변 매장을 반환합니다. */
 /**
  * Serving path: use the scheduler-refreshed Firestore directory first. The slow public API is
  * retained only as a stale/missing-directory fallback and is never the normal location request.
  */
-export async function fetchNearbySuwonStores(lat: number, lon: number, radius: number, query?: string) {
-  const preloaded = await loadPreloadedSuwonStores();
+export async function fetchNearbyKoreanStores(lat: number, lon: number, radius: number, query?: string) {
+  // The scheduled Suwon directory remains a warm-cache optimization only. Every other
+  // Korean location uses the same bounded public-data query and spatial Firestore cache.
+  const preloaded = isWithinSuwon(lat, lon) ? await loadPreloadedSuwonStores() : undefined;
   if (preloaded) {
     const nearby = preloaded
       .map((store) => ({ ...store, distanceMeters: distanceMeters(lat, lon, store.latitude, store.longitude) }))
@@ -597,11 +608,14 @@ export async function fetchNearbySuwonStores(lat: number, lon: number, radius: n
       .sort((left, right) => left.distanceMeters - right.distanceMeters);
     return filterStoresByQuery(nearby, query);
   }
-  return fetchLiveNearbySuwonStores(lat, lon, radius, query);
+  return fetchLiveNearbyKoreanStores(lat, lon, radius, query);
 }
 
+/** Backward-compatible name used by the existing Suwon scheduler job. */
+export const fetchNearbySuwonStores = fetchNearbyKoreanStores;
+
 /** Scheduler-only/public-directory fallback path. Never call this on a user request if preloaded data exists. */
-export async function fetchLiveNearbySuwonStores(lat: number, lon: number, radius: number, query?: string, pageCount = FRANCHISE_DISCOVERY_PAGE_COUNT) {
+export async function fetchLiveNearbyKoreanStores(lat: number, lon: number, radius: number, query?: string, pageCount = FRANCHISE_DISCOVERY_PAGE_COUNT) {
   const configuredServiceKey = process.env.DATA_GO_KR_SERVICE_KEY?.trim();
   if (!configuredServiceKey) throw new Error("DATA_GO_KR_SERVICE_KEY is not configured");
 
@@ -663,7 +677,7 @@ export async function fetchLiveNearbySuwonStores(lat: number, lon: number, radiu
   const stores = pageItems
     .map((item) => ({ id: item.bizesId, name: [item.bizesNm, item.brchNm].filter(Boolean).join(" "), category: item.indsMclsNm ?? item.indsLclsNm ?? "기타", address: item.rdnmAdr ?? "", latitude: Number(item.lat), longitude: Number(item.lon) }))
     .filter((store) => Number.isFinite(store.latitude) && Number.isFinite(store.longitude))
-    .filter((store) => isWithinSuwon(store.latitude, store.longitude))
+    .filter((store) => isWithinKorea(store.latitude, store.longitude))
     // Only register geofences for franchises whose coupons can be matched in this MVP.
     .filter((store) => isSupportedFranchiseStore(store.name))
     .map((store) => ({ ...store, distanceMeters: distanceMeters(lat, lon, store.latitude, store.longitude) }))
@@ -673,6 +687,9 @@ export async function fetchLiveNearbySuwonStores(lat: number, lon: number, radiu
   await savePersistedStoreDirectory(cacheKey, stores, expiresAt);
   return filterStoresByQuery(stores, query);
 }
+
+/** Backward-compatible name used by the existing Suwon scheduler job. */
+export const fetchLiveNearbySuwonStores = fetchLiveNearbyKoreanStores;
 
 app.get("/health", (_req, res) => res.json({ ok: true, service: "couponcok-api" }));
 
@@ -700,19 +717,19 @@ app.get("/v1/stores/nearby", async (req, res) => {
   const longitude = Number(req.query.lng);
   const radius = Math.min(Math.max(Number(req.query.radius ?? 1_000), 100), 1_500);
   const query = typeof req.query.query === "string" ? req.query.query : undefined;
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !isWithinSuwon(latitude, longitude)) {
-    return res.status(400).json({ error: "lat and lng must point inside Suwon city" });
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !isWithinKorea(latitude, longitude)) {
+    return res.status(400).json({ error: "lat and lng must point inside South Korea" });
   }
 
   try {
     const stores = await traceOperation("tool.search_nearby_stores", {
-      "couponcok.region": "수원시",
+      "couponcok.region": "대한민국",
       "couponcok.radius_m": radius
-    }, () => fetchNearbySuwonStores(latitude, longitude, radius, query));
+    }, () => fetchNearbyKoreanStores(latitude, longitude, radius, query));
     res.json({
-      region: "수원시",
-      source: SUWON_STORE_DATA_SOURCE.id,
-      sourceMetadata: { ...SUWON_STORE_DATA_SOURCE, retrievedAt: new Date().toISOString() },
+      region: "대한민국",
+      source: KOREA_STORE_DATA_SOURCE.id,
+      sourceMetadata: { ...KOREA_STORE_DATA_SOURCE, retrievedAt: new Date().toISOString() },
       radius,
       discovery: { mode: "supported-franchise", pagesScanned: FRANCHISE_DISCOVERY_PAGE_COUNT },
       stores

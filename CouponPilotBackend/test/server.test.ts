@@ -6,7 +6,7 @@ import { calculateOptions, matchingBenefitRules } from "../src/calculator.js";
 import { adkResultMatchesCalculator, shouldRunAdk } from "../src/adkClient.js";
 import { validateBenefitDocument } from "../src/benefitRag.js";
 import { assertAgentPayloadSafe, findSensitiveValue, pseudonymizeSubject, redactSensitiveText } from "../src/privacy.js";
-import { app, cardRecognitionInputIsSafe } from "../src/server.js";
+import { app, cardRecognitionInputIsSafe, isWithinKorea } from "../src/server.js";
 import { createMcpApp } from "../src/mcpServer.js";
 
 const server = app.listen(0, "127.0.0.1");
@@ -16,6 +16,9 @@ assert(address && typeof address !== "string");
 const baseURL = `http://127.0.0.1:${address.port}`;
 
 try {
+  assert.equal(isWithinKorea(37.5665, 126.978), true, "Seoul coordinates must be accepted by the nationwide store boundary");
+  assert.equal(isWithinKorea(33.4996, 126.5312), true, "Jeju coordinates must be accepted by the nationwide store boundary");
+  assert.equal(isWithinKorea(35.6762, 139.6503), false, "non-Korean coordinates must stay outside the public-data boundary");
   const governedBenefit = {
     id: "skt-reviewed-benefit",
     title: "검토된 SKT 공식 혜택",

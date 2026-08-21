@@ -8,7 +8,7 @@ import { z } from "zod";
 import { searchOfficialBenefits } from "./benefitRag.js";
 import { calculateOptions, matchingBenefitRules, type RecommendationInput } from "./calculator.js";
 import { initializeObservability, traceHttpRequest, traceOperation } from "./observability.js";
-import { fetchNearbySuwonStores, SUWON_STORE_DATA_SOURCE } from "./server.js";
+import { fetchNearbyKoreanStores, KOREA_BOUNDS, KOREA_STORE_DATA_SOURCE } from "./server.js";
 import { verifyStoreWithExternalMaps } from "./externalMapsMcp.js";
 
 const MAX_MONEY_WON = 1_000_000;
@@ -83,8 +83,8 @@ const storeOutputSchema = z.object({
   name: z.string().min(1),
   category: z.string(),
   address: z.string(),
-  latitude: z.number().min(37.18).max(37.34),
-  longitude: z.number().min(126.90).max(127.15),
+  latitude: z.number().min(KOREA_BOUNDS.minLat).max(KOREA_BOUNDS.maxLat),
+  longitude: z.number().min(KOREA_BOUNDS.minLon).max(KOREA_BOUNDS.maxLon),
   distanceMeters: z.number().nonnegative()
 }).strict();
 
@@ -94,7 +94,7 @@ const storeSourceMetadataSchema = z.object({
   title: z.string().min(1),
   officialURL: z.string().url(),
   apiVersion: z.literal("sdsc2"),
-  scope: z.literal("수원시"),
+  scope: z.literal("대한민국"),
   refreshPolicy: z.string().min(1),
   usage: z.literal("store-identification-only"),
   retrievedAt: z.string().datetime()
@@ -133,7 +133,7 @@ const calculatedOptionOutputSchema = z.object({
 
 /** Every Tool result is parsed again at the producer boundary before an Agent can consume it. */
 const storeSearchOutputSchema = z.object({
-  region: z.literal("수원시"),
+  region: z.literal("대한민국"),
   source: z.literal("data.go.kr"),
   sourceMetadata: storeSourceMetadataSchema,
   stores: z.array(storeOutputSchema).max(500)
@@ -154,8 +154,8 @@ const externalPlaceVerificationOutputSchema = z.object({
   provider: z.enum(["google-maps-mcp", "kakao-local-api", "unavailable"]),
   status: z.enum(["verified", "fallback_verified", "not_configured", "unavailable"]),
   query: z.string().min(1).max(200),
-  coarseLatitude: z.number().min(37.18).max(37.34),
-  coarseLongitude: z.number().min(126.90).max(127.15),
+  coarseLatitude: z.number().min(KOREA_BOUNDS.minLat).max(KOREA_BOUNDS.maxLat),
+  coarseLongitude: z.number().min(KOREA_BOUNDS.minLon).max(KOREA_BOUNDS.maxLon),
   attributionURLs: z.array(z.string().url()).max(5),
   candidateCount: z.number().int().min(0).max(20),
   policy: z.string().min(1)
@@ -173,11 +173,11 @@ function createCouponCockMcpServer() {
   const server = new McpServer({ name: "couponcok-tools", version: "1.0.0" });
 
   server.registerTool("search_nearby_stores", {
-    title: "수원 매장 검색",
-    description: "수원시 좌표 주변에서 쿠폰콕 지원 프랜차이즈 매장을 검색합니다. 사용자의 쿠폰·바코드 정보는 전달하지 마세요.",
+    title: "전국 매장 검색",
+    description: "대한민국 좌표 주변에서 쿠폰콕 지원 프랜차이즈 매장을 검색합니다. 사용자의 쿠폰·바코드 정보는 전달하지 마세요.",
     inputSchema: z.object({
-      latitude: z.number().min(37.18).max(37.34),
-      longitude: z.number().min(126.90).max(127.15),
+      latitude: z.number().min(KOREA_BOUNDS.minLat).max(KOREA_BOUNDS.maxLat),
+      longitude: z.number().min(KOREA_BOUNDS.minLon).max(KOREA_BOUNDS.maxLon),
       radiusMeters: z.number().int().min(100).max(1_500).default(1_000),
       query: z.string().trim().min(1).max(100).optional()
     }).strict(),
@@ -185,13 +185,13 @@ function createCouponCockMcpServer() {
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true }
   }, async ({ latitude, longitude, radiusMeters, query }) => {
     const stores = await traceOperation("mcp.search_nearby_stores", {
-      "couponcok.region": "수원시",
+      "couponcok.region": "대한민국",
       "couponcok.radius_m": radiusMeters
-    }, () => fetchNearbySuwonStores(latitude, longitude, radiusMeters, query));
+    }, () => fetchNearbyKoreanStores(latitude, longitude, radiusMeters, query));
     return toolResult(storeSearchOutputSchema, {
-      region: "수원시",
-      source: SUWON_STORE_DATA_SOURCE.id,
-      sourceMetadata: { ...SUWON_STORE_DATA_SOURCE, retrievedAt: new Date().toISOString() },
+      region: "대한민국",
+      source: KOREA_STORE_DATA_SOURCE.id,
+      sourceMetadata: { ...KOREA_STORE_DATA_SOURCE, retrievedAt: new Date().toISOString() },
       stores
     });
   });
@@ -201,15 +201,15 @@ function createCouponCockMcpServer() {
     description: "Google Maps 공식 MCP로 매장명을 보조 검증하고, 응답 불가 시 카카오 공식 Local REST API를 fallback으로 사용합니다. 정밀 GPS·쿠폰·바코드는 외부로 전송하지 않습니다.",
     inputSchema: z.object({
       storeName: z.string().trim().min(1).max(150),
-      latitude: z.number().min(37.18).max(37.34),
-      longitude: z.number().min(126.90).max(127.15),
+      latitude: z.number().min(KOREA_BOUNDS.minLat).max(KOREA_BOUNDS.maxLat),
+      longitude: z.number().min(KOREA_BOUNDS.minLon).max(KOREA_BOUNDS.maxLon),
       radiusMeters: z.number().int().min(100).max(1_500).default(1_000)
     }).strict(),
     outputSchema: externalPlaceVerificationOutputSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true }
   }, async (input) => {
     const result = await traceOperation("mcp.verify_store_with_external_maps", {
-      "couponcok.region": "수원시",
+      "couponcok.region": "대한민국",
       "couponcok.maps.precision": "0.01-degree-grid"
     }, () => verifyStoreWithExternalMaps(input));
     return toolResult(externalPlaceVerificationOutputSchema, result);

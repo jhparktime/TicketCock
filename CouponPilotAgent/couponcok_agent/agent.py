@@ -79,10 +79,10 @@ def build_root_agent() -> SequentialAgent:
     store_context_agent = LlmAgent(
         name="store_context_agent",
         model=MODEL,
-        description="수원 매장 진입 좌표와 매장 브랜드를 확인하는 전문 에이전트",
+        description="전국 매장 진입 좌표와 매장 브랜드를 확인하는 전문 에이전트",
         instruction="""
 사용자 요청에서 storeId, storeName, 좌표를 확인하세요.
-좌표가 있으면 반드시 search_nearby_stores를 호출해 수원시 지원 프랜차이즈인지 확인하세요.
+좌표가 있으면 반드시 search_nearby_stores를 호출해 대한민국 내 지원 프랜차이즈인지 확인하세요.
 매장명과 좌표가 있으면 verify_store_with_external_maps도 한 번 호출하세요. 이 도구는 정밀 위치를 외부에 보내지 않고 0.01도 격자·매장명만 Google Maps 공식 MCP에 전달하며, 실패 시 카카오 공식 Local API를 사용합니다.
 외부 지도 결과는 보조 근거일 뿐입니다. data.go.kr 매장 원본을 대체하지 말고, unavailable이면 추정하지 마세요.
 좌표가 없으면 제공된 storeName을 그대로 사용하고 위치가 미검증임을 표시하세요.

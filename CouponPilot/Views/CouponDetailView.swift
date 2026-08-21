@@ -8,7 +8,8 @@ struct CouponDetailView: View {
     @State private var showUseConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var showEditor = false
-    @State private var showCouponViewer = false
+    @State private var showCouponViewer = AppState.captureTarget == "barcode"
+    @State private var storedBarcode: StoredCouponBarcode?
 
     var body: some View {
         ScrollView {
@@ -76,6 +77,7 @@ struct CouponDetailView: View {
         .safeAreaInset(edge: .bottom) {
             actionBar
         }
+        .onAppear { storedBarcode = SecureCouponBarcodeStore.barcode(for: coupon.id) }
         .confirmationDialog("결제가 완료되었나요?", isPresented: $showUseConfirmation, titleVisibility: .visible) {
             Button("결제 완료 · 사용 처리", role: .destructive) {
                 appState.markCouponUsed(coupon)
@@ -100,7 +102,7 @@ struct CouponDetailView: View {
             }
         }
         .sheet(isPresented: $showCouponViewer) {
-            CouponViewerSheet(coupon: coupon)
+            CouponViewerSheet(coupon: coupon, storedBarcode: storedBarcode)
         }
     }
 
@@ -206,6 +208,10 @@ private struct CouponPassCard: View {
         case .ediya: Color(red: 0.04, green: 0.28, blue: 0.56)
         case .ashleyqueens: Color(red: 0.25, green: 0.24, blue: 0.23)
         case .hollys: Color(red: 0.74, green: 0.06, blue: 0.12)
+        case .cu: Color(red: 0.43, green: 0.16, blue: 0.67)
+        case .gs25: Color(red: 0.00, green: 0.42, blue: 0.28)
+        case .seveneleven: Color(red: 0.00, green: 0.42, blue: 0.30)
+        case .emart24: Color(red: 0.98, green: 0.72, blue: 0.00)
         default: AppPalette.accent
         }
     }
@@ -214,27 +220,30 @@ private struct CouponPassCard: View {
 private struct CouponViewerSheet: View {
     @Environment(\.dismiss) private var dismiss
     let coupon: Coupon
+    let storedBarcode: StoredCouponBarcode?
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let image = CouponImageStore.shared.image(named: coupon.localImageFilename) {
-                    ScrollView {
+            ScrollView {
+                VStack(spacing: 20) {
+                    if let barcode = displayBarcode, let barcodeImage = CouponBarcodeRenderer.image(for: barcode) {
+                        RedeemableBarcodePreview(barcode: barcode, image: barcodeImage)
+                    }
+
+                    if let image = CouponImageStore.shared.image(named: coupon.localImageFilename) {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFit()
                             .frame(maxWidth: .infinity)
-                            .padding(20)
-                    }
-                } else {
-                    VStack(spacing: 18) {
+                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    } else if displayBarcode == nil {
                         CouponPassCard(coupon: coupon)
                         Text("등록된 쿠폰 원본 이미지가 없어요")
                             .font(.subheadline)
                             .foregroundStyle(AppPalette.muted)
                     }
-                    .padding(20)
                 }
+                .padding(20)
             }
             .background(AppPalette.topCanvas)
             .navigationTitle("쿠폰 보기")
@@ -245,6 +254,14 @@ private struct CouponViewerSheet: View {
                 }
             }
         }
+    }
+
+    /// 스크린샷 시나리오에서만 로컬 보관 바코드 화면을 재현합니다.
+    /// 실제 앱에서는 Keychain에서 읽은 값만 렌더링합니다.
+    private var displayBarcode: StoredCouponBarcode? {
+        if let storedBarcode { return storedBarcode }
+        guard AppState.captureTarget == "barcode" else { return nil }
+        return StoredCouponBarcode(candidate: CouponBarcodeCandidate(value: "8801234567890", format: .code128))
     }
 }
 
@@ -266,6 +283,65 @@ private struct CouponSecondaryButtonStyle: ButtonStyle {
             .frame(height: 50)
             .background(AppPalette.canvas, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
+    }
+}
+
+private struct RedeemableBarcodePreview: View {
+    let barcode: StoredCouponBarcode
+    let image: UIImage
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Label("교환용 바코드", systemImage: "barcode.viewfinder")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppPalette.ink)
+                Spacer()
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(AppPalette.accent)
+            }
+
+            Image(uiImage: image)
+                .interpolation(.none)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity)
+                .frame(height: barcode.format == .code128 ? 104 : 180)
+                .padding(.horizontal, barcode.format == .code128 ? 0 : 30)
+
+            Text("\(barcode.format.title) · 이 iPhone에 암호화 보관됨")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(.white.opacity(0.86), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("교환용 \(barcode.format.title) 바코드")
+    }
+}
+
+private struct CouponBarcodeUnavailablePreview: View {
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "barcode.viewfinder")
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(AppPalette.accent)
+            Text("교환용 바코드가 저장되지 않았어요")
+                .font(.headline)
+            Text("쿠폰 사진을 다시 등록해 실제 바코드를 인식하거나, 원본 쿠폰 앱에서 확인해 주세요.")
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 }
 

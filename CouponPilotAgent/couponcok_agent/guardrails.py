@@ -8,6 +8,7 @@ from typing import Any
 from google.adk.tools import BaseTool, ToolContext
 
 ALLOWED_CARRIERS = {"SKT", "KT", "LG U+"}
+KOREA_BOUNDS = {"min_lat": 33.0, "max_lat": 39.1, "min_lon": 124.0, "max_lon": 132.0}
 SENSITIVE_KEYS = {
     "barcode",
     "barcodevalue",
@@ -153,10 +154,10 @@ def validate_tool_call(
         latitude = args.get("latitude")
         longitude = args.get("longitude")
         radius = args.get("radiusMeters", 1_000)
-        if not isinstance(latitude, (int, float)) or not 37.18 <= latitude <= 37.34:
-            return _blocked("MVP 서비스 지역인 수원시 위도 범위를 벗어났습니다.")
-        if not isinstance(longitude, (int, float)) or not 126.90 <= longitude <= 127.15:
-            return _blocked("MVP 서비스 지역인 수원시 경도 범위를 벗어났습니다.")
+        if not isinstance(latitude, (int, float)) or not KOREA_BOUNDS["min_lat"] <= latitude <= KOREA_BOUNDS["max_lat"]:
+            return _blocked("대한민국 서비스 지역 위도 범위를 벗어났습니다.")
+        if not isinstance(longitude, (int, float)) or not KOREA_BOUNDS["min_lon"] <= longitude <= KOREA_BOUNDS["max_lon"]:
+            return _blocked("대한민국 서비스 지역 경도 범위를 벗어났습니다.")
         if not isinstance(radius, int) or not 100 <= radius <= 1_500:
             return _blocked("매장 검색 반경은 100~1,500m여야 합니다.")
         if tool.name == "verify_store_with_external_maps":

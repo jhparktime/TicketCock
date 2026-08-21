@@ -51,7 +51,7 @@ export function normalizedBrand(value: string) {
   return value.toLocaleLowerCase("ko-KR").replace(/[^\p{L}\p{N}]/gu, "");
 }
 
-/** iOS의 SupportedFranchise와 같은 MVP 대상 매장 별칭입니다. */
+/** iOS의 SupportedFranchise와 같은 지원 프랜차이즈·편의점 매장 별칭입니다. */
 export const SUPPORTED_FRANCHISE_ALIASES: Record<string, string[]> = {
   "스타벅스": ["스타벅스", "starbucks"],
   "투썸플레이스": ["투썸플레이스", "투썸", "twosomeplace", "twosome"],
@@ -66,7 +66,11 @@ export const SUPPORTED_FRANCHISE_ALIASES: Record<string, string[]> = {
   "베스킨라빈스": ["베스킨라빈스", "배스킨라빈스", "baskinrobbins", "baskin"],
   "파리바게뜨": ["파리바게뜨", "파리바게트", "parisbaguette"],
   "뚜레쥬르": ["뚜레쥬르", "touslesjours"],
-  "애슐리 퀸즈": ["애슐리퀸즈", "애슐리 퀸즈", "ashleyqueens", "ashley"]
+  "애슐리 퀸즈": ["애슐리퀸즈", "애슐리 퀸즈", "ashleyqueens", "ashley"],
+  "CU": ["cu", "씨유", "bgf리테일", "bgfretail"],
+  "GS25": ["gs25", "지에스25", "gs리테일", "gsretail"],
+  "세븐일레븐": ["세븐일레븐", "7eleven", "seveneleven", "코리아세븐"],
+  "이마트24": ["이마트24", "emart24", "이마트이십사"]
 };
 
 export function isSupportedFranchiseStore(storeName: string) {

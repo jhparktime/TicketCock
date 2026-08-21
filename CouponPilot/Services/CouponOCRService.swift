@@ -56,6 +56,31 @@ struct CouponOCRService {
         return CardRecognitionResult(card: matchedCard, sensitiveNumberDetectedAndIgnored: hasLongNumber)
     }
 
+    /// Finds only formats that CouponCock can faithfully re-render with Core Image. The source
+    /// photo and payload remain on the iPhone; this result is never used in remote OCR/AI calls.
+    func detectRedeemableCouponBarcodes(in image: UIImage) async throws -> [CouponBarcodeCandidate] {
+        guard let cgImage = image.cgImage else { throw OCRServiceError.invalidImage }
+        return try await withCheckedThrowingContinuation { continuation in
+            let request = VNDetectBarcodesRequest { request, error in
+                if let error { continuation.resume(throwing: error); return }
+                let candidates = ((request.results as? [VNBarcodeObservation]) ?? []).compactMap { observation -> CouponBarcodeCandidate? in
+                    guard let value = observation.payloadStringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+                          !value.isEmpty,
+                          value.utf8.count <= 512,
+                          let format = couponBarcodeFormat(for: observation.symbology) else { return nil }
+                    return CouponBarcodeCandidate(value: value, format: format)
+                }
+                let unique = Array(Dictionary(grouping: candidates, by: \.id).values.compactMap(\.first))
+                continuation.resume(returning: unique)
+            }
+            request.symbologies = [.code128, .qr, .dataMatrix, .pdf417, .aztec]
+            DispatchQueue.global(qos: .userInitiated).async {
+                do { try VNImageRequestHandler(cgImage: cgImage).perform([request]) }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
+    }
+
     /// Prepares a one-time card-identification payload. The original front and back photos never
     /// leave the device and are never written to disk. The back remains OCR-only. The front may
     /// leave the device only as a visual signature after all detected text and conservative PAN
@@ -84,6 +109,17 @@ struct CouponOCRService {
             frontVisualSignatureBase64: imageData.base64EncodedString(),
             sensitiveValuesMasked: frontSafeText.maskedSensitiveValues || backSafeText.maskedSensitiveValues
         )
+    }
+}
+
+private func couponBarcodeFormat(for symbology: VNBarcodeSymbology) -> CouponBarcodeCandidate.Format? {
+    switch symbology {
+    case .code128: .code128
+    case .qr: .qr
+    case .dataMatrix: .dataMatrix
+    case .pdf417: .pdf417
+    case .aztec: .aztec
+    default: nil
     }
 }
 

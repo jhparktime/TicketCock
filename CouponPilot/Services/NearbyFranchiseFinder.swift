@@ -21,13 +21,11 @@ final class NearbyFranchiseFinder: ObservableObject {
             for item in response.mapItems {
                 guard let name = item.name, franchise.matches(name) else { continue }
                 let location = item.placemark.coordinate
-                guard SuwonScope.minimumLatitude...SuwonScope.maximumLatitude ~= location.latitude,
-                      SuwonScope.minimumLongitude...SuwonScope.maximumLongitude ~= location.longitude else { continue }
                 let distance = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
                     .distance(from: CLLocation(latitude: location.latitude, longitude: location.longitude))
                 guard distance <= 1_600 else { continue }
                 let stableID = "mapkit-\(franchise.rawValue)-\(String(format: "%.5f-%.5f", location.latitude, location.longitude))"
-                found.append(Store(id: stableID, name: name, category: "카페", latitude: location.latitude, longitude: location.longitude, radiusMeters: 120))
+                found.append(Store(id: stableID, name: name, category: franchise.storeCategory, latitude: location.latitude, longitude: location.longitude, radiusMeters: 120))
             }
         }
 

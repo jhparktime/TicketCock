@@ -11,6 +11,9 @@ struct CouponImportSheet: View {
     @State private var draft = CouponDraft()
     @State private var isRecognizing = false
     @State private var usedAINormalization = false
+    @State private var barcodeCandidates: [CouponBarcodeCandidate] = []
+    @State private var selectedBarcode: CouponBarcodeCandidate?
+    @State private var saveRedeemableBarcode = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -39,6 +42,7 @@ struct CouponImportSheet: View {
 
                     if previewImage != nil, !isRecognizing {
                         couponForm
+                        barcodeConfirmation
                         rawTextPreview
                     }
                 }
@@ -53,7 +57,11 @@ struct CouponImportSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("저장") {
                         if let previewImage, draft.expiresAt >= Calendar.current.startOfDay(for: .now) {
-                            appState.saveImportedCoupon(draft: draft, image: previewImage)
+                            appState.saveImportedCoupon(
+                                draft: draft,
+                                image: previewImage,
+                                barcode: saveRedeemableBarcode ? selectedBarcode : nil
+                            )
                             dismiss()
                         }
                     }
@@ -211,6 +219,45 @@ struct CouponImportSheet: View {
         .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
+    @ViewBuilder
+    private var barcodeConfirmation: some View {
+        if !barcodeCandidates.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("교환용 바코드를 찾았어요", systemImage: "barcode.viewfinder")
+                    .font(.headline)
+                Text("실제 교환 코드는 이 iPhone의 암호화된 보관소에만 저장됩니다. Firebase, Gemini, 추천 서버에는 전송하지 않아요.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ForEach(barcodeCandidates) { candidate in
+                    Button {
+                        selectedBarcode = candidate
+                    } label: {
+                        HStack {
+                            Image(systemName: selectedBarcode == candidate ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(selectedBarcode == candidate ? AppPalette.accent : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(candidate.format.title).font(.subheadline.weight(.semibold))
+                                Text(candidate.maskedValue).font(.caption.monospaced()).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Toggle("선택한 코드를 교환용으로 저장", isOn: $saveRedeemableBarcode)
+                    .tint(AppPalette.accent)
+                    .disabled(selectedBarcode == nil)
+                Text("발급처의 사용 조건을 확인한 뒤 저장하세요. 쿠폰을 삭제하면 이 코드도 함께 지워집니다.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(18)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+    }
+
     @MainActor
     private func recognize(_ item: PhotosPickerItem) async {
         isRecognizing = true
@@ -223,7 +270,13 @@ struct CouponImportSheet: View {
                 throw OCRServiceError.invalidImage
             }
             previewImage = image
-            rawText = try await CouponOCRService().recognizeRawText(in: image)
+            let ocr = CouponOCRService()
+            async let recognizedText = ocr.recognizeRawText(in: image)
+            async let detectedBarcodes = ocr.detectRedeemableCouponBarcodes(in: image)
+            rawText = try await recognizedText
+            barcodeCandidates = (try? await detectedBarcodes) ?? []
+            selectedBarcode = barcodeCandidates.first
+            saveRedeemableBarcode = false
             draft = CouponOCRParser.makeDraft(from: rawText)
             usedAINormalization = false
             let redactedRemoteText = CouponOCRParser.redactedForRemoteNormalization(rawText)

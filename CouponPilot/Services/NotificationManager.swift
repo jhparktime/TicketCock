@@ -22,7 +22,7 @@ final class NotificationManager: NSObject, ObservableObject {
         refreshAuthorizationStatus()
     }
 
-    func notifyStoreEntry(_ store: Store, couponCount: Int, savings: Int? = nil) async {
+    func notifyStoreEntry(_ store: Store, couponCount: Int, savings: Int? = nil, identifier: String? = nil) async {
         // The location callback can arrive immediately after the user approves the alert.
         // Read the system setting here instead of relying on a previously published value.
         let status = await currentAuthorizationStatus()
@@ -38,7 +38,7 @@ final class NotificationManager: NSObject, ObservableObject {
         }
         content.sound = .default
         content.userInfo = ["storeID": store.id]
-        let request = UNNotificationRequest(identifier: "store-entry-\(store.id)", content: content, trigger: nil)
+        let request = UNNotificationRequest(identifier: identifier ?? "store-entry-\(store.id)", content: content, trigger: nil)
         try? await UNUserNotificationCenter.current().add(request)
     }
 

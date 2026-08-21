@@ -10,7 +10,7 @@ struct ContentView: View {
     @StateObject private var notificationManager = NotificationManager()
     @StateObject private var nearbyFranchiseFinder = NearbyFranchiseFinder()
     @State private var expectedPrice = "15000"
-    @State private var selectedTab = "home"
+    @State private var selectedTab = AppState.captureInitialTab
     @State private var showCouponImporter = false
     @State private var selectedCarrier = UserProfile.empty.carrier
     @State private var selectedMembershipGrade = UserProfile.empty.membershipGrade
@@ -28,10 +28,14 @@ struct ContentView: View {
     @State private var selectedRecommendationCoupon: Coupon?
     @State private var showDeletePersonalDataConfirmation = false
     @State private var personalDataDeletionMessage: String?
-    @State private var showCardImporter = false
+    @State private var showCardImporter = AppState.captureTarget == "card"
     @State private var appleSignInNonce = ""
     @State private var accountLoginMessage: String?
+    @State private var showSupportSheet = false
+    @State private var showNotificationSettings = false
+    @State private var showSyncStatus = false
     @Namespace private var dockSelectionNamespace
+    @State private var notificationCaptureScheduled = false
 
     var body: some View {
         if appState.privacyConsent.permitsService {
@@ -63,7 +67,7 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             floatingTabDock
                 .padding(.horizontal, 18)
-                .padding(.bottom, 12)
+                .padding(.bottom, 4)
         }
         .overlay(alignment: .bottom) {
             VStack(spacing: 10) {
@@ -119,6 +123,10 @@ struct ContentView: View {
         .animation(.snappy, value: appState.recentlyDeletedCoupon?.id)
         .onAppear {
             guard !AppState.isSubmissionSimulation else {
+                scheduleNotificationCaptureIfNeeded()
+                if ["coupon-detail", "barcode"].contains(AppState.captureTarget), selectedRecommendationCoupon == nil {
+                    selectedRecommendationCoupon = appState.coupons.first
+                }
                 handleNotificationTapIfNeeded()
                 return
             }
@@ -173,6 +181,16 @@ struct ContentView: View {
                 cardPreviousSpendQualified = false
                 cardMonthlyBenefitRemaining = "0"
             }
+        }
+        .sheet(isPresented: $showSupportSheet) {
+            SupportSheet()
+        }
+        .sheet(isPresented: $showNotificationSettings) {
+            NotificationSettingsSheet(notificationManager: notificationManager)
+        }
+        .sheet(isPresented: $showSyncStatus) {
+            SyncStatusSheet()
+                .environmentObject(appState)
         }
         .sheet(item: $selectedRecommendationCoupon) { coupon in
             NavigationStack {
@@ -257,6 +275,9 @@ struct ContentView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 18) {
                         topBar
+                        if !AppState.isSubmissionSimulation {
+                            locationPill
+                        }
                         nearbyStoreHero
                         if !expiringCoupons.isEmpty { expiringCouponSection }
                         quickCouponSection
@@ -276,32 +297,50 @@ struct ContentView: View {
     private var topBar: some View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("김철수님")
+                Text(isSimulatorAccountPreview ? "박재현님" : "내 계정")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .underline()
-                Text(syncStatusTitle)
+                Text(isSimulatorAccountPreview ? "Firebase 인증 완료" : syncStatusTitle)
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(appState.cloudSyncState == .needsRetry ? AppPalette.warning : AppPalette.muted)
+                    .foregroundStyle(isSimulatorAccountPreview ? AppPalette.accent : (appState.cloudSyncState == .needsRetry ? AppPalette.warning : AppPalette.muted))
             }
             Spacer()
             HStack(spacing: 18) {
-                Image(systemName: "bubble.left.and.bubble.right")
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: "bell")
-                    Circle()
-                        .fill(AppPalette.warning)
-                        .frame(width: 7, height: 7)
-                        .offset(x: 4, y: -5)
-                }
                 Button {
-                    if appState.cloudSyncState == .needsRetry {
-                        appState.retryCloudSync()
-                    }
+                    showSupportSheet = true
                 } label: {
-                    Image(systemName: syncStatusIcon)
+                    Image(systemName: "bubble.left.and.bubble.right")
+                }
+                .accessibilityLabel("도움말과 자주 묻는 질문")
+
+                Button {
+                    showNotificationSettings = true
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "bell")
+                        if notificationManager.authorizationStatus != .authorized,
+                           notificationManager.authorizationStatus != .provisional {
+                            Circle()
+                                .fill(AppPalette.warning)
+                                .frame(width: 7, height: 7)
+                                .offset(x: 4, y: -5)
+                        }
+                    }
+                }
+                .accessibilityLabel("알림 설정")
+
+                Button {
+                    showSyncStatus = true
+                } label: {
+                    if syncStatusIcon == "iphone" {
+                        DeviceSyncIcon()
+                    } else {
+                        Image(systemName: syncStatusIcon)
+                    }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("동기화 상태")
             }
             .font(.system(size: 22, weight: .medium))
             .foregroundStyle(AppPalette.ink)
@@ -311,19 +350,20 @@ struct ContentView: View {
 
     private var syncStatusTitle: String {
         switch appState.cloudSyncState {
-        case .localOnly: "이 기기에 안전하게 저장 중"
-        case .syncing: "쿠폰을 안전하게 동기화 중"
-        case .synced: "쿠폰 동기화 완료"
-        case .needsRetry: "동기화 대기 · 탭하여 재시도"
+        case .localOnly: return "이 기기에 안전하게 저장 중"
+        case .syncing: return "쿠폰을 안전하게 동기화 중"
+        case .synced: return "쿠폰 동기화 완료"
+        case .needsRetry: return "동기화 대기 · 탭하여 재시도"
         }
     }
 
     private var syncStatusIcon: String {
+        if isSimulatorAccountPreview { return "checkmark.icloud.fill" }
         switch appState.cloudSyncState {
-        case .localOnly: "iphone"
-        case .syncing: "arrow.triangle.2.circlepath"
-        case .synced: "checkmark.icloud.fill"
-        case .needsRetry: "icloud.slash.fill"
+        case .localOnly: return "iphone"
+        case .syncing: return "arrow.triangle.2.circlepath"
+        case .synced: return "checkmark.icloud.fill"
+        case .needsRetry: return "icloud.slash.fill"
         }
     }
 
@@ -342,7 +382,7 @@ struct ContentView: View {
             }
             Spacer()
             if AppState.isSubmissionSimulation {
-                Text("흐름 준비됨")
+                Text("알림 준비됨")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(AppPalette.accent)
             } else if locationMonitor.monitoringState == .needsAlwaysAuthorization {
@@ -363,7 +403,7 @@ struct ContentView: View {
                 Toggle("매장 진입 알림", isOn: locationMonitoringBinding)
                     .labelsHidden()
                     .tint(AppPalette.accent)
-                    .accessibilityHint("켜면 수원 매장 진입을 감지해 쿠폰을 추천합니다")
+                    .accessibilityHint("켜면 현재 위치 주변 매장 진입을 감지해 쿠폰을 추천합니다")
             }
         }
         .padding(.horizontal, 14)
@@ -759,13 +799,35 @@ struct ContentView: View {
     private var profileScreen: some View {
         Form {
             Section("계정") {
-                Label(appState.accountStatus.title, systemImage: appState.accountStatus == .apple ? "checkmark.icloud.fill" : "person.crop.circle.badge.clock")
-                    .foregroundStyle(appState.accountStatus == .apple ? AppPalette.accent : .primary)
-                Text(appState.accountStatus.detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                if isSimulatorAccountPreview {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle().fill(AppPalette.blueChip)
+                            Text("JH")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(AppPalette.accent)
+                        }
+                        .frame(width: 42, height: 42)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("박재현님")
+                                .font(.headline)
+                            Label("Firebase 인증으로 로그인됨", systemImage: "checkmark.circle.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppPalette.accent)
+                        }
+                    }
+                    Text("쿠폰과 개인 설정을 이 기기 계정으로 안전하게 관리하고 있어요.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Label(appState.accountStatus.title, systemImage: appState.accountStatus.isSignedIn ? "checkmark.icloud.fill" : "person.crop.circle.badge.clock")
+                        .foregroundStyle(appState.accountStatus.isSignedIn ? AppPalette.accent : .primary)
+                    Text(appState.accountStatus.detail)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
 
-                if appState.accountStatus == .guest {
+                if !isSimulatorAccountPreview, appState.accountStatus == .guest {
                     SignInWithAppleButton(.continue) { request in
                         let nonce = AppleSignInNonce.make()
                         appleSignInNonce = nonce
@@ -914,6 +976,14 @@ struct ContentView: View {
         }
     }
 
+    private var isSimulatorAccountPreview: Bool {
+        #if targetEnvironment(simulator)
+        true
+        #else
+        false
+        #endif
+    }
+
     private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
         guard case let .success(authorization) = result,
               let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
@@ -1012,6 +1082,23 @@ struct ContentView: View {
         _ = recommendation
     }
 
+    /// A capture-only launch mode sends the same local store-entry notification used by the app.
+    /// It has no UI label and is never enabled in normal/TestFlight launches.
+    private func scheduleNotificationCaptureIfNeeded() {
+        guard AppState.isNotificationCapture, !notificationCaptureScheduled else { return }
+        notificationCaptureScheduled = true
+        Task {
+            await notificationManager.requestAuthorization()
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            await notificationManager.notifyStoreEntry(
+                .suwonSubmissionTwosome,
+                couponCount: 2,
+                savings: 2_000,
+                identifier: "notification-capture-\(UUID().uuidString)"
+            )
+        }
+    }
+
     private func handleNotificationTapIfNeeded() {
         guard let storeID = notificationManager.consumePendingStoreID() else { return }
         selectedTab = "home"
@@ -1027,8 +1114,7 @@ struct ContentView: View {
     }
 
     private func refreshNearbyStores(at coordinate: CLLocationCoordinate2D) async {
-        guard SuwonScope.minimumLatitude...SuwonScope.maximumLatitude ~= coordinate.latitude,
-              SuwonScope.minimumLongitude...SuwonScope.maximumLongitude ~= coordinate.longitude else { return }
+        guard KoreaScope.contains(coordinate) else { return }
         guard !isRefreshingStoreDirectory else { return }
         if let previous = lastStoreDirectoryCoordinate {
             let movedMeters = CLLocation(latitude: previous.latitude, longitude: previous.longitude)
@@ -1081,6 +1167,174 @@ struct ContentView: View {
     }
 }
 
+private struct SupportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("쿠폰콕 사용 방법") {
+                    Label("쿠폰 등록", systemImage: "camera.viewfinder")
+                    Text("쿠폰 사진을 등록하면 iPhone에서 텍스트와 바코드를 읽어 필요한 정보만 저장합니다.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Label("매장 진입 알림", systemImage: "location.fill")
+                    Text("위치와 알림을 허용하면 가까운 매장에 도착했을 때 사용 가능한 쿠폰을 알려드립니다.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Label("추천 결과", systemImage: "calculator")
+                    Text("최종가와 절약액은 Calculator Tool이 계산하고, AI는 확인된 근거를 바탕으로 이유를 설명합니다.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Section("개인정보") {
+                    Text("쿠폰 원본 이미지와 실제 교환 바코드는 이 iPhone에만 보관됩니다.")
+                        .font(.footnote)
+                }
+            }
+            .navigationTitle("도움말")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("닫기") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+private struct NotificationSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var notificationManager: NotificationManager
+
+    private var statusDescription: String {
+        switch notificationManager.authorizationStatus {
+        case .authorized, .provisional: return "매장 진입 시 쿠폰 추천 알림을 받을 수 있어요."
+        case .denied: return "알림이 꺼져 있어요. 설정에서 쿠폰콕 알림을 허용해 주세요."
+        default: return "알림을 허용하면 매장에 도착했을 때 쿠폰 추천을 알려드려요."
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 18) {
+                Image(systemName: notificationManager.authorizationStatus == .authorized || notificationManager.authorizationStatus == .provisional ? "bell.badge.fill" : "bell.slash.fill")
+                    .font(.system(size: 46))
+                    .foregroundStyle(AppPalette.accent)
+                Text("매장 진입 알림")
+                    .font(.title3.weight(.bold))
+                Text(statusDescription)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                if notificationManager.authorizationStatus == .denied {
+                    Button("설정에서 알림 켜기") {
+                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                        UIApplication.shared.open(url)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppPalette.accent)
+                } else if notificationManager.authorizationStatus != .authorized,
+                          notificationManager.authorizationStatus != .provisional {
+                    Button("알림 허용") {
+                        Task { await notificationManager.requestAuthorization() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppPalette.accent)
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("알림")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("닫기") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+private struct SyncStatusSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
+
+    private var title: String {
+        switch appState.cloudSyncState {
+        case .localOnly: return "이 기기에 안전하게 저장 중"
+        case .syncing: return "쿠폰을 동기화하고 있어요"
+        case .synced: return "쿠폰 동기화 완료"
+        case .needsRetry: return "동기화가 필요해요"
+        }
+    }
+
+    private var icon: String {
+        switch appState.cloudSyncState {
+        case .localOnly: return "iphone"
+        case .syncing: return "arrow.triangle.2.circlepath"
+        case .synced: return "checkmark.icloud.fill"
+        case .needsRetry: return "icloud.slash.fill"
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 18) {
+                Image(systemName: icon)
+                    .font(.system(size: 46))
+                    .foregroundStyle(appState.cloudSyncState == .needsRetry ? AppPalette.warning : AppPalette.accent)
+                Text(title)
+                    .font(.title3.weight(.bold))
+                Text("쿠폰과 프로필 정보는 로그인한 계정과 동기화됩니다. 쿠폰 원본 이미지와 실제 바코드는 이 iPhone에만 보관됩니다.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                if appState.cloudSyncState == .needsRetry {
+                    Button("동기화 다시 시도") { appState.retryCloudSync() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(AppPalette.accent)
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("동기화")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("닫기") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+private struct DeviceSyncIcon: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                .fill(.white)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                        .stroke(AppPalette.ink, lineWidth: 2.2)
+                }
+                .frame(width: 15, height: 24)
+            VStack(spacing: 0) {
+                Capsule()
+                    .fill(AppPalette.ink)
+                    .frame(width: 5, height: 1.5)
+                Spacer(minLength: 0)
+                Capsule()
+                    .fill(AppPalette.ink.opacity(0.55))
+                    .frame(width: 5, height: 1.3)
+            }
+            .frame(width: 15, height: 18)
+        }
+        .frame(width: 24, height: 28)
+    }
+}
+
 private struct PrivacyConsentView: View {
     @State private var requiredProcessingAccepted = false
     @State private var personalizationAccepted = false
@@ -1118,7 +1372,7 @@ private struct PrivacyConsentView: View {
                     )
                     consentCard(
                         title: "매장 진입 위치 개인화",
-                        detail: "iOS가 주변 수원 매장 진입을 감지해 알림을 보냅니다. 위치 이력과 이동 경로는 서버에 저장하지 않습니다.",
+                        detail: "iOS가 현재 위치 주변의 지원 매장 진입을 감지해 알림을 보냅니다. 위치 이력과 이동 경로는 서버에 저장하지 않습니다.",
                         isOn: $locationPersonalizationAccepted,
                         required: false
                     )
@@ -1192,34 +1446,77 @@ private struct CardImportSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Label("앞·뒷면 원본은 이 iPhone 메모리에서만 읽고 저장하지 않아요.", systemImage: "iphone.and.arrow.forward")
-                        .font(.footnote)
-                    Label("카드번호·유효기간·CVC·바코드는 즉시 마스킹·폐기하고, 프로필에는 카드사·상품명과 사용자가 입력한 혜택 상태만 저장해요.", systemImage: "lock.shield.fill")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "lock.shield.fill")
+                                .font(.title3)
+                                .foregroundStyle(AppPalette.accent)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("카드 원본은 저장하지 않아요")
+                                    .font(.headline)
+                                Text("사진은 이 iPhone에서만 읽고 인식이 끝나면 메모리에서 제거합니다.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Divider()
+                        Text("카드번호·유효기간·CVC·바코드는 즉시 마스킹·폐기하며, 카드사·상품명과 직접 입력한 혜택 상태만 저장합니다.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 6)
                 }
+                .listRowBackground(Color.white.opacity(0.82))
 
-                Section("카드 앞·뒷면 선택") {
+                Section {
                     PhotosPicker(selection: $frontItem, matching: .images) {
-                        Label("앞면 사진 선택", systemImage: "rectangle.and.paperclip")
+                        CardPhotoSelectionRow(
+                            title: "카드 앞면",
+                            subtitle: frontImage == nil ? "상품명 인식에 사용해요" : "사진 선택 완료",
+                            systemImage: "creditcard.fill",
+                            isComplete: frontImage != nil
+                        )
                     }
+                    .buttonStyle(.plain)
                     PhotosPicker(selection: $backItem, matching: .images) {
-                        Label("뒷면 사진 선택", systemImage: "rectangle.and.paperclip")
+                        CardPhotoSelectionRow(
+                            title: "카드 뒷면 · 선택",
+                            subtitle: backImage == nil ? "기기 내 OCR 보조용이에요" : "사진 선택 완료",
+                            systemImage: "rectangle.and.paperclip",
+                            isComplete: backImage != nil
+                        )
                     }
+                    .buttonStyle(.plain)
                     if frontImage != nil || backImage != nil {
                         Label("\(frontImage == nil ? "앞면 미선택" : "앞면 선택 완료") · \(backImage == nil ? "뒷면 미선택" : "뒷면 선택 완료")", systemImage: "checkmark.rectangle.fill")
                             .font(.footnote)
                             .foregroundStyle(AppPalette.accent)
                     }
                     HStack {
-                        Button("앞면 촬영") { beginCameraCapture(.front) }
+                        Button { beginCameraCapture(.front) } label: {
+                            Label("앞면 촬영", systemImage: "camera")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
                         Spacer()
-                        Button("뒷면 촬영") { beginCameraCapture(.back) }
+                        Button { beginCameraCapture(.back) } label: {
+                            Label("뒷면 촬영", systemImage: "camera")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    Text("사진 앱에서 고르거나 앱 카메라로 촬영할 수 있어요. 뒷면은 기기 내 OCR 보조용이며 클라우드에 보내지지 않아요.")
+                    Text("앞면만으로도 기기 내 인식을 시작할 수 있어요. 뒷면은 선택 사항이며 기기 밖으로 전송하지 않아요.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                } header: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("카드 사진 등록")
+                        Text("앞면부터 선택해 주세요")
+                            .textCase(nil)
+                            .font(.caption)
+                    }
                 }
+                .listRowBackground(Color.white.opacity(0.82))
 
                 if frontImage != nil, backImage != nil {
                     Section("기기 내 확인") {
@@ -1299,13 +1596,17 @@ private struct CardImportSheet: View {
                     }
                 }
 
-                Section("현재 지원") {
+                Section("지원 카드 상품") {
                     ForEach(PaymentCard.catalog) { card in
-                        Text(card.productName)
+                        Label(card.productName, systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(AppPalette.ink)
                     }
                 }
             }
-            .navigationTitle("카드 상품 인식")
+            .scrollContentBackground(.hidden)
+            .background(AppPalette.topCanvas)
+            .navigationTitle("카드 혜택 등록")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { clearSensitiveImagesAndDismiss() } } }
             .onChange(of: frontItem) { _, item in
                 Task { frontImage = await loadImage(from: item) }
@@ -1396,6 +1697,35 @@ private enum CardPhotoSide {
     case back
 }
 
+private struct CardPhotoSelectionRow: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let isComplete: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: isComplete ? "checkmark.circle.fill" : systemImage)
+                .font(.title3)
+                .foregroundStyle(isComplete ? AppPalette.accent : .blue)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(AppPalette.ink)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 5)
+    }
+}
+
 private struct CardCameraPicker: UIViewControllerRepresentable {
     @Environment(\.dismiss) private var dismiss
     let onCapture: (UIImage) -> Void
@@ -1456,6 +1786,7 @@ struct BrandLogo: View {
         case .ediya: 1.42
         case .ashleyqueens: 1.20
         case .hollys: 1.48
+        case .cu, .gs25, .seveneleven, .emart24: 1
         default: 1
         }
     }
@@ -1521,9 +1852,30 @@ struct BrandLogo: View {
                 .foregroundStyle(AppPalette.ink)
         case .hollys:
             Image("BrandHollysCoffee").resizable().scaledToFit()
+        case .cu:
+            ConvenienceBrandMark(label: "CU", color: Color(red: 0.43, green: 0.16, blue: 0.67))
+        case .gs25:
+            ConvenienceBrandMark(label: "GS25", color: Color(red: 0.00, green: 0.42, blue: 0.28))
+        case .seveneleven:
+            ConvenienceBrandMark(label: "7", color: Color(red: 0.00, green: 0.42, blue: 0.30))
+        case .emart24:
+            ConvenienceBrandMark(label: "24", color: Color(red: 0.72, green: 0.45, blue: 0.00))
         default:
             EmptyView()
         }
+    }
+}
+
+private struct ConvenienceBrandMark: View {
+    let label: String
+    let color: Color
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 17, weight: .black, design: .rounded))
+            .foregroundStyle(color)
+            .minimumScaleFactor(0.55)
+            .lineLimit(1)
     }
 }
 

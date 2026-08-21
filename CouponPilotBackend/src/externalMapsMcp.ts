@@ -43,7 +43,7 @@ function coarseCoordinate(value: number) {
 
 function buildQuery(storeName: string) {
   const normalized = storeName.replace(/\s+/gu, " ").trim();
-  return `${normalized} 수원시 대한민국`;
+  return `${normalized} 대한민국`;
 }
 
 function cappedRadius(radiusMeters: number) {

@@ -33,8 +33,25 @@ struct CouponPilotApp: App {
 final class AppState: ObservableObject {
     /// Submission runs are opt-in. A normal simulator, TestFlight, and App Store build always
     /// starts with the user's own wallet and never loads this scenario.
+    static let isNotificationCapture = ProcessInfo.processInfo.arguments.contains("-CouponCokNotificationCapture")
     static let isSubmissionSimulation = ProcessInfo.processInfo.arguments.contains("-CouponCokSubmission")
+        || isNotificationCapture
         || ProcessInfo.processInfo.environment["COUPONCOK_SUBMISSION"] == "1"
+    /// Screenshot-only destination. It has no effect unless the opt-in submission simulation is enabled.
+    static let captureTarget: String? = {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-CouponCokCapture"), arguments.indices.contains(index + 1) else { return nil }
+        return arguments[index + 1]
+    }()
+
+    static var captureInitialTab: String {
+        switch captureTarget {
+        case "coupons": "coupons"
+        case "history": "history"
+        case "profile", "card": "profile"
+        default: "home"
+        }
+    }
 
     private struct NotificationRecommendationContext: Codable {
         let store: Store
@@ -51,7 +68,7 @@ final class AppState: ObservableObject {
         var message: String {
             switch self {
             case .awaitingLocation: "위치를 확인하면 주변 매장을 불러올게요"
-            case .loading: "수원시 매장 정보를 불러오는 중이에요"
+            case .loading: "현재 위치 주변 매장 정보를 불러오는 중이에요"
             case .live: "주변 대상 매장을 감지하고 있어요"
             case .empty: "현재 위치 근처에 대상 매장이 없어요"
             case .unavailable: "매장 목록을 불러오지 못했어요"
@@ -64,13 +81,14 @@ final class AppState: ObservableObject {
     }
 
     enum AccountStatus: Equatable {
-        case unavailable, guest, apple
+        case unavailable, guest, apple, submission
 
         var title: String {
             switch self {
             case .unavailable: "로그인 준비 중"
             case .guest: "기기 임시 계정"
             case .apple: "Apple 계정으로 로그인됨"
+            case .submission: "박재현님으로 로그인됨"
             }
         }
 
@@ -79,7 +97,12 @@ final class AppState: ObservableObject {
             case .unavailable: "Firebase 설정을 확인한 뒤 로그인할 수 있어요."
             case .guest: "Apple로 로그인하면 쿠폰과 설정을 내 계정에 연결할 수 있어요."
             case .apple: "새 기기에서도 Apple 로그인을 통해 쿠폰과 설정을 불러올 수 있어요."
+            case .submission: "박재현의 쿠폰·멤버십 설정이 계정에 안전하게 동기화되어 있어요."
             }
+        }
+
+        var isSignedIn: Bool {
+            self == .apple || self == .submission
         }
     }
 
@@ -124,9 +147,26 @@ final class AppState: ObservableObject {
             recentlyUsedCoupon = nil
             recentlyDeletedCoupon = nil
             coupons = Coupon.submissionCoupons
+            if Self.captureTarget == "barcode", let coupon = Coupon.submissionCoupons.first {
+                // 시연 캡처에서만 기기 Keychain에 저장하는 표시용 교환 코드입니다.
+                // 일반 실행·Firestore·API 요청에는 포함되지 않습니다.
+                try? SecureCouponBarcodeStore.save(
+                    CouponBarcodeCandidate(value: "8801234567890", format: .code128),
+                    couponID: coupon.id
+                )
+            }
             profile = .submission
             nearbyStores = [.suwonSubmissionTwosome]
             storeDirectoryState = .live
+            firebaseUserID = "submission-jaehyun-park"
+            firebaseReady = true
+            accountStatus = .submission
+            cloudSyncState = .synced
+            if Self.captureTarget == "recommendation" {
+                currentStore = .suwonSubmissionTwosome
+                recommendation = .submissionPreview(for: .suwonSubmissionTwosome)
+                shouldShowRecommendation = true
+            }
             return
         }
 
@@ -293,10 +333,13 @@ final class AppState: ObservableObject {
         scheduleCloudReconciliation()
     }
 
-    func saveImportedCoupon(draft: CouponDraft, image: UIImage) {
+    func saveImportedCoupon(draft: CouponDraft, image: UIImage, barcode: CouponBarcodeCandidate? = nil) {
         let couponID = UUID().uuidString
         let imageFilename = try? CouponImageStore.shared.save(image: image, couponID: couponID)
         saveImportedCoupon(draft.makeCoupon(id: couponID, localImageFilename: imageFilename))
+        if let barcode {
+            try? SecureCouponBarcodeStore.save(barcode, couponID: couponID)
+        }
     }
 
     func markCouponUsed(_ coupon: Coupon) {
@@ -335,6 +378,7 @@ final class AppState: ObservableObject {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             guard !Task.isCancelled, let self, self.recentlyDeletedCoupon?.id == coupon.id else { return }
             try? CouponImageStore.shared.delete(named: coupon.localImageFilename)
+            SecureCouponBarcodeStore.delete(couponID: coupon.id)
             self.recentlyDeletedCoupon = nil
             self.couponDeletionUndoExpirationTask = nil
         }
@@ -527,6 +571,7 @@ final class AppState: ObservableObject {
                 refreshAccountStatus()
             }
             try CouponImageStore.shared.deleteAll()
+            SecureCouponBarcodeStore.deleteAll()
             UserDefaults.standard.removeObject(forKey: "saved-imported-coupons")
             UserDefaults.standard.removeObject(forKey: "saved-used-coupons")
             UserDefaults.standard.removeObject(forKey: "saved-user-profile")

@@ -28,6 +28,7 @@
 		A00100000000000000000020 /* NearbyFranchiseFinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000018 /* NearbyFranchiseFinder.swift */; };
 		A00100000000000000000021 /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = A01000000000000000000004 /* FirebaseAppCheck */; };
 		A00100000000000000000022 /* AppleSignInNonce.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000019 /* AppleSignInNonce.swift */; };
+		A00100000000000000000023 /* SecureCouponBarcodeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200000000000000000020 /* SecureCouponBarcodeStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +50,7 @@
 		A00200000000000000000016 /* Resources/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
 		A00200000000000000000018 /* NearbyFranchiseFinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyFranchiseFinder.swift; sourceTree = "<group>"; };
 		A00200000000000000000019 /* AppleSignInNonce.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInNonce.swift; sourceTree = "<group>"; };
+		A00200000000000000000020 /* SecureCouponBarcodeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureCouponBarcodeStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -106,6 +108,7 @@
 				A00200000000000000000015 /* FirestoreRepository.swift */,
 				A00200000000000000000018 /* NearbyFranchiseFinder.swift */,
 				A00200000000000000000019 /* AppleSignInNonce.swift */,
+				A00200000000000000000020 /* SecureCouponBarcodeStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -228,6 +231,7 @@
 				A00100000000000000000017 /* FirestoreRepository.swift in Sources */,
 				A00100000000000000000020 /* NearbyFranchiseFinder.swift in Sources */,
 				A00100000000000000000022 /* AppleSignInNonce.swift in Sources */,
+				A00100000000000000000023 /* SecureCouponBarcodeStore.swift in Sources */,
 				A00100000000000000000006 /* ContentView.swift in Sources */,
 				A00100000000000000000007 /* RecommendationSheet.swift in Sources */,
 				A00100000000000000000010 /* CouponImportSheet.swift in Sources */,
