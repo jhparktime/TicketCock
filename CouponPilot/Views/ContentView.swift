@@ -446,9 +446,11 @@ struct ContentView: View {
                     .lineSpacing(1)
                     .foregroundStyle(AppPalette.ink)
 
-                Text(AppState.isSubmissionSimulation ? "등록 쿠폰 2장을 Calculator Tool로 비교합니다." : appState.storeDirectoryState.message)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(AppPalette.muted)
+                if !AppState.isSubmissionSimulation {
+                    Text(appState.storeDirectoryState.message)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                }
 
             if !AppState.isSubmissionSimulation {
                 Button {
@@ -590,9 +592,11 @@ struct ContentView: View {
             }
             ForEach(expiringCoupons) { coupon in
                 HStack(spacing: 12) {
-                    Image(systemName: "ticket.fill").foregroundStyle(AppPalette.warning)
+                    BrandLogo(brand: coupon.brand, size: 38)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(coupon.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Text("\(coupon.brand) \(coupon.title)")
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
                         Text(coupon.daysUntilExpiry == 0 ? "오늘 만료" : "\(coupon.daysUntilExpiry)일 후 만료")
                             .font(.caption).foregroundStyle(.secondary)
                     }
@@ -1441,7 +1445,7 @@ private struct LiquidBackground: View {
     }
 }
 
-private struct BrandLogo: View {
+struct BrandLogo: View {
     let brand: String
     let size: CGFloat
 
@@ -1472,6 +1476,16 @@ private struct BrandLogo: View {
                     .resizable()
                     .scaledToFit()
                     .padding(size * 0.12)
+            case .parisbaguette:
+                Image("BrandParisBaguette")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(size * 0.08)
+            case .touslesjours:
+                Image("BrandTousLesJours")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(size * 0.08)
             default:
                 Image(systemName: "ticket.fill")
                     .font(.system(size: size * 0.40, weight: .bold))

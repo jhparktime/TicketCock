@@ -12,17 +12,8 @@ struct CouponDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                couponHeader
                 couponImage
-                VStack(alignment: .leading, spacing: 7) {
-                    Text(coupon.brand.uppercased())
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.secondary)
-                    Text(coupon.title)
-                        .font(.title2.weight(.bold))
-                    Text(coupon.discountType == .percentage ? "제조 음료 \(coupon.discountValue)% 할인" : "\(coupon.discountValue.formatted())원 할인")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(AppPalette.accent)
-                }
 
                 VStack(spacing: 0) {
                     detailRow("유효기간", value: coupon.expiresAt.formatted(date: .long, time: .omitted))
@@ -93,6 +84,22 @@ struct CouponDetailView: View {
         }
     }
 
+    private var couponHeader: some View {
+        HStack(alignment: .center, spacing: 15) {
+            BrandLogo(brand: coupon.brand, size: 72)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(coupon.brand.uppercased())
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                Text(coupon.title)
+                    .font(.title2.weight(.bold))
+                Text(coupon.discountType == .percentage ? "제조 음료 \(coupon.discountValue)% 할인" : "\(coupon.discountValue.formatted())원 할인")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(AppPalette.accent)
+            }
+        }
+    }
+
     @ViewBuilder
     private var couponImage: some View {
         if let image = CouponImageStore.shared.image(named: coupon.localImageFilename) {
@@ -102,11 +109,6 @@ struct CouponDetailView: View {
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                 .overlay { RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(.primary.opacity(0.08), lineWidth: 1) }
-        } else {
-            ContentUnavailableView("저장된 이미지가 없어요", systemImage: "photo", description: Text("이미지로 추가한 쿠폰은 여기에서 원본을 확인할 수 있어요."))
-                .frame(maxWidth: .infinity)
-                .frame(height: 240)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         }
     }
 
