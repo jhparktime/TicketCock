@@ -530,7 +530,7 @@ struct ContentView: View {
     private var quickCouponSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("바로 쓸 쿠폰")
+                Text("쿠폰 미리보기")
                     .font(.system(size: 20, weight: .bold))
                 Spacer()
                 Button {
