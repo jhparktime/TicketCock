@@ -3,59 +3,59 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="쿠폰콕 — 매장에 들어가면 가장 유리한 쿠폰과 통신사 혜택을 알려주는 iPhone 앱" />
-    <title>쿠폰콕 | 지금, 가장 이득인 쿠폰</title>
+    <meta name="description" content="쿠폰콕 — 매장 맥락에서 쿠폰과 공식 혜택을 계산 근거와 함께 비교하는 iPhone 앱" />
+    <title>쿠폰콕 | 매장에 도착하면, 가장 유리한 혜택을 콕</title>
     <link rel="icon" type="image/png" href="assets/couponcok-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
-    <style>
-      .brand-icon { width: 31px; height: 31px; border-radius: 10px; box-shadow: 0 7px 17px #d789a66b; }
-      img.app-icon { display: block; width: 34px; height: 34px; object-fit: cover; background: transparent; border-radius: 12px; box-shadow: 0 7px 17px #d789a66b; }
-    </style>
   </head>
   <body>
-    <div class="aurora aurora-one"></div><div class="aurora aurora-two"></div>
+    <div class="aurora aurora-one"></div><div class="aurora aurora-two"></div><div class="grid-noise"></div>
     <header class="nav wrap">
       <a class="brand" href="#top" aria-label="쿠폰콕 홈"><img class="brand-icon" src="assets/couponcok-icon.png" alt="" /><span>쿠폰콕</span></a>
-      <nav><a href="#how">서비스</a><a href="#trust">안전하게</a><a class="github" href="https://github.com/jhparktime/TicketCock" target="_blank" rel="noreferrer">GitHub ↗</a></nav>
+      <nav aria-label="페이지 탐색"><a href="#flow">서비스 흐름</a><a href="#trust">안전 설계</a><a href="#screens">시연 화면</a><a class="github" href="https://github.com/jhparktime/TicketKok" target="_blank" rel="noreferrer">GitHub ↗</a></nav>
     </header>
-
     <main id="top">
       <section class="hero wrap">
         <div class="hero-copy">
-          <p class="eyebrow"><span></span> SUWON MVP · iOS</p>
-          <h1>들어가는 순간,<br /><em>가장 이득인</em> 쿠폰을 콕.</h1>
-          <p class="lead">흩어진 모바일 쿠폰과 통신사 멤버십을 한곳에. 매장에 진입하면 지금 쓸 수 있는 최적의 혜택을 계산해 알려드려요.</p>
-          <div class="hero-actions"><a class="button primary" href="https://github.com/jhparktime/TicketCock" target="_blank" rel="noreferrer">프로젝트 보기 <b>→</b></a><a class="button text" href="#how">어떻게 작동하나요? ↓</a></div>
-          <div class="mini-proof"><div class="avatars"><i>☕</i><i>🍞</i><i>🍦</i></div><p>10개 프랜차이즈 · SKT · KT · U+ 멤버십 지원</p></div>
+          <p class="eyebrow"><span></span> iOS PERSONALIZED BENEFIT AGENT</p>
+          <h1>매장에 도착하면,<br /><em>지금 가장 유리한</em><br />혜택을 콕.</h1>
+          <p class="lead">쿠폰콕은 보유 쿠폰, 통신사·카드 공식 혜택, 현재 매장 맥락을 함께 확인합니다. 최종가와 절약액은 Calculator Tool이 계산하고, AI는 근거를 이해하기 쉽게 설명합니다.</p>
+          <div class="hero-actions"><a class="button primary" href="#screens">실제 앱 화면 보기 <b>↓</b></a><a class="button text" href="https://github.com/jhparktime/TicketKok" target="_blank" rel="noreferrer">구현 코드 살펴보기 ↗</a></div>
+          <div class="metric-row" aria-label="구현 범위"><div><b>4</b><span>Sequential Agents</span></div><div><b>4</b><span>Read-only MCP Tools</span></div><div><b>20</b><span>Nearby Geofences</span></div></div>
         </div>
-
-        <div class="phone-wrap" aria-label="쿠폰콕 추천 화면 예시">
-          <div class="glow-ring"></div>
-          <div class="phone">
-            <div class="dynamic-island"></div><div class="status"><b>9:41</b><span>⌁ ◒ ▰</span></div>
-            <div class="phone-content">
-              <div class="app-head"><div><small>8월 12일 화요일</small><h2>안녕하세요,<br />재현님 <span>✦</span></h2></div><img class="app-icon" src="assets/couponcok-icon.png" alt="쿠폰콕" /></div>
-              <div class="location-pill">⌖ &nbsp; 투썸플레이스 수원시청점</div>
-              <div class="saving-card"><p>지금 <strong>3,000원</strong> 더<br />절약할 수 있어요</p><small>✦ 위치 기반 추천 · 시연용</small></div>
-              <p class="section-label">지금 사용할 수 있는 쿠폰</p>
-              <div class="coupon"><div class="coupon-brand">A<br /><span>TWOSOME</span></div><div><small>아메리카노 R</small><b>2,000원 할인</b><p>2026. 08. 30까지</p></div><span class="chev">›</span></div>
-              <div class="recommend"><span class="spark">✦</span><div><b>AI 조합 추천</b><p>쿠폰 사용이 가장 유리해요</p></div><strong>3,000원 ↓</strong></div>
-            </div>
-          </div>
+        <div class="hero-visual" aria-label="쿠폰콕 홈 화면과 계산 추천 화면">
+          <div class="visual-orbit orbit-one"></div><div class="visual-orbit orbit-two"></div>
+          <div class="phone phone-primary"><img src="demo-screenshots/01-home-submission.png" alt="Firebase 인증과 쿠폰 목록을 보여주는 쿠폰콕 홈 화면" /></div>
+          <div class="phone phone-float"><img src="demo-screenshots/05-recommendation-calculator.png" alt="Calculator 결과와 AI 추천 설명을 구분해 보여주는 추천 화면" /></div>
+          <div class="hero-badge"><span>✦</span><p><b>Calculator 결과 고정</b><small>AI는 금액·순위를 변경하지 않습니다.</small></p></div>
         </div>
       </section>
-
-      <section class="problem wrap"><p class="eyebrow"><span></span> WHY COUPONCOK</p><h2>혜택은 많지만,<br />결제 직전엔 늘 <em>놓치기 쉽습니다.</em></h2><div class="problem-grid"><article><b>01</b><h3>여러 앱에 흩어진 쿠폰</h3><p>선물, 브랜드 앱마다 따로 확인하느라 정작 필요한 순간에 찾기 어렵습니다.</p></article><article><b>02</b><h3>복잡한 중복 조건</h3><p>쿠폰과 멤버십의 조합은 매장과 등급, 월 사용 여부에 따라 달라집니다.</p></article><article><b>03</b><h3>조용히 지나가는 만료일</h3><p>쓸 수 있었던 쿠폰도 기억하지 못하면 결국 사용하지 못한 채 사라집니다.</p></article></div></section>
-
-      <section class="how" id="how"><div class="wrap"><p class="eyebrow"><span></span> HOW IT WORKS</p><h2>쿠폰콕은 결제 전<br />복잡한 판단을 대신 정리합니다.</h2><div class="steps"><article><div class="number">1</div><div><h3>쿠폰을 한 번에 등록</h3><p>사진을 넣으면 iPhone 내부 OCR이 쿠폰 정보를 읽고, 사용자가 확인한 구조화 정보만 저장합니다.</p></div><span class="step-icon">▣</span></article><article><div class="number">2</div><div><h3>매장 진입을 감지</h3><p>수원 프랜차이즈 매장 반경에 들어오면, 해당 브랜드의 사용 가능한 쿠폰만 골라 알립니다.</p></div><span class="step-icon">⌖</span></article><article><div class="number">3</div><div><h3>가장 유리한 결제 방법 추천</h3><p>계산기 도구가 할인액과 중복 조건을 계산하고, AI는 그 결과를 쉽게 설명합니다.</p></div><span class="step-icon">✦</span></article></div></div></section>
-
-      <section class="trust wrap" id="trust"><div class="trust-copy"><p class="eyebrow"><span></span> PRIVATE BY DESIGN</p><h2>쿠폰 이미지는<br /><em>내 iPhone 안에.</em></h2><p>민감한 바코드 이미지가 서버에 남지 않도록 설계했습니다. 계산은 정해진 규칙으로, AI는 설명과 텍스트 정리에만 사용합니다.</p><a class="button dark" href="https://github.com/jhparktime/TicketCock/blob/main/CouponPilot/Docs/ARCHITECTURE.md" target="_blank" rel="noreferrer">아키텍처 살펴보기 ↗</a></div><div class="trust-list"><div><span>▣</span><p><b>기기 내부 OCR</b><small>원본 쿠폰 이미지는 앱 내부에만 보관</small></p></div><div><span>⌘</span><p><b>결정론적 계산기</b><small>할인 금액·중복 여부는 규칙으로 산출</small></p></div><div><span>↗</span><p><b>공식 혜택 근거</b><small>통신사 공식 문서를 RAG로 함께 확인</small></p></div></div></section>
-
-      <section class="cta wrap"><p>COUPONCOK</p><h2>오늘의 쿠폰을,<br />놓치지 마세요.</h2><a class="button primary" href="https://github.com/jhparktime/TicketCock" target="_blank" rel="noreferrer">GitHub에서 코드 보기 <b>→</b></a></section>
+      <section class="problem wrap">
+        <p class="eyebrow"><span></span> WHY COUPONCOK</p>
+        <div class="section-title"><h2>혜택은 많은데,<br /><em>결제 직전의 판단</em>은 어렵습니다.</h2><p>쿠폰과 멤버십, 카드 조건이 여러 앱과 문서에 흩어져 있어 사용자는 실제 매장 앞에서 가장 유리한 선택을 놓치기 쉽습니다.</p></div>
+        <div class="problem-grid"><article><b>01</b><h3>흩어진 쿠폰</h3><p>갤러리·메신저·브랜드 앱에 보관된 쿠폰을 결제 전에 찾기 어렵습니다.</p></article><article><b>02</b><h3>복잡한 적용 조건</h3><p>최소 주문금액, 최대 할인, 등급, 전월 실적, 중복 여부를 직접 비교해야 합니다.</p></article><article><b>03</b><h3>신뢰할 수 없는 추천</h3><p>근거와 계산이 분리되지 않으면 사용자는 AI의 할인 금액을 믿기 어렵습니다.</p></article></div>
+      </section>
+      <section class="flow" id="flow"><div class="wrap">
+        <p class="eyebrow"><span></span> CONTEXT → EVIDENCE → DECISION</p><h2>찾고, 확인하고, 계산하고,<br /><em>선택은 사용자가 합니다.</em></h2>
+        <div class="steps"><article><div class="step-top"><span>01</span><i>▣</i></div><h3>기기 안에서 쿠폰 등록</h3><p>Vision OCR이 쿠폰 텍스트를 읽고, 사용자가 구조화한 정보와 실제 교환용 바코드를 기기 안에 안전하게 보관합니다.</p></article><article><div class="step-top"><span>02</span><i>⌖</i></div><h3>주변 지원 매장 식별</h3><p>Core Location, MapKit, 공공 상가(상권)정보를 결합해 대한민국 내 지원 프랜차이즈 후보를 좁힙니다.</p></article><article><div class="step-top"><span>03</span><i>✦</i></div><h3>근거 기반으로 비교</h3><p>공식 혜택 RAG와 Calculator Tool이 적용 가능한 후보만 비교하고, Agent는 설명과 근거 흐름을 담당합니다.</p></article><article><div class="step-top"><span>04</span><i>✓</i></div><h3>사용자가 최종 확인</h3><p>쿠폰콕은 결제를 실행하지 않습니다. 사용자가 바코드를 열고 결제 완료·사용 처리를 직접 선택합니다.</p></article></div>
+      </div></section>
+      <section class="decision wrap">
+        <div class="decision-copy"><p class="eyebrow"><span></span> EXPLAINABLE BY DESIGN</p><h2>AI가 판단을<br /><em>대신하는 것이 아니라,</em><br />근거를 연결합니다.</h2><p>Store, Coupon, Benefit, Recommendation Agent는 각자 매장 맥락, 쿠폰 후보, 공식 혜택 검색, 설명 생성을 분담합니다. 할인 금액과 순위는 LLM이 아니라 결정론적 Calculator Tool만 확정합니다.</p><div class="agent-list"><span>Store Agent</span><b>→</b><span>Coupon Agent</span><b>→</b><span>Benefit Agent</span><b>→</b><span>Recommendation Agent</span></div></div>
+        <div class="decision-phone"><img src="demo-screenshots/05-recommendation-calculator.png" alt="계산 결과, 공식 조건, 생성형 AI 설명이 분리된 추천 결과 화면" /></div>
+      </section>
+      <section class="trust wrap" id="trust">
+        <div class="trust-copy"><p class="eyebrow"><span></span> PRIVATE · VERIFIABLE · REVERSIBLE</p><h2>민감한 정보는<br /><em>기기 안에 남깁니다.</em></h2><p>쿠폰 원본 이미지와 실제 교환용 바코드는 iPhone에만 보관합니다. 서버에는 마스킹·검증된 최소 정보만 전달하며, 공식 근거가 없으면 혜택을 만들어 내지 않습니다.</p><a class="button dark" href="https://github.com/jhparktime/TicketKok/blob/main/CouponPilot/Docs/ARCHITECTURE.md" target="_blank" rel="noreferrer">아키텍처 문서 보기 ↗</a></div>
+        <div class="trust-list"><div><span>▣</span><p><b>온디바이스 OCR·Keychain</b><small>원본 이미지와 실제 바코드는 Firestore·Cloud Run·Gemini로 전송하지 않습니다.</small></p></div><div><span>⌘</span><p><b>공식 문서 RAG</b><small>확인일·권리·유효기간을 통과한 Active 문서만 혜택 근거로 사용합니다.</small></p></div><div><span>✓</span><p><b>Human-in-the-Loop</b><small>자동 사용 처리는 하지 않으며, 사용 처리 후 5초 Undo와 기록 복원을 제공합니다.</small></p></div><div><span>◎</span><p><b>Fail-closed 정책</b><small>근거·API·모델이 실패하면 할인 금액을 추정하지 않고 안전한 안내로 전환합니다.</small></p></div></div>
+      </section>
+      <section class="screens" id="screens"><div class="wrap">
+        <div class="screens-head"><div><p class="eyebrow"><span></span> PRODUCT WALKTHROUGH</p><h2>현재 구현된<br /><em>쿠폰콕의 핵심 경험</em></h2></div><p>시연 화면은 iOS Simulator에서 캡처한 현재 앱 흐름입니다.</p></div>
+        <div class="screen-grid"><figure class="screen-card feature"><img src="demo-screenshots/01-home-submission.png" alt="보유 쿠폰과 매장 진입 혜택을 보여주는 홈 화면" /><figcaption><b>01 · 홈</b><span>보유 쿠폰과 주변 매장 맥락</span></figcaption></figure><figure class="screen-card"><img src="demo-screenshots/05-recommendation-calculator.png" alt="Calculator Tool 계산 결과와 AI 설명을 보여주는 추천 화면" /><figcaption><b>02 · 추천</b><span>계산 결과와 설명을 분리</span></figcaption></figure><figure class="screen-card"><img src="demo-screenshots/06-coupon-detail-hitl.png" alt="사용 처리와 실행 취소를 제공하는 쿠폰 상세 화면" /><figcaption><b>03 · 사용자 확인</b><span>결제 후 직접 사용 처리</span></figcaption></figure><figure class="screen-card"><img src="demo-screenshots/08-barcode-device-only.png" alt="기기 전용 바코드 저장을 보여주는 쿠폰 화면" /><figcaption><b>04 · 기기 전용 바코드</b><span>실제 값은 기기 밖으로 전송하지 않음</span></figcaption></figure></div>
+      </div></section>
+      <section class="cta wrap"><p>COUPONKOK · AGENTIC BENEFIT SERVICE</p><h2>오늘의 쿠폰을<br />놓치지 마세요.</h2><div><a class="button light" href="https://github.com/jhparktime/TicketKok" target="_blank" rel="noreferrer">GitHub에서 구현 확인 <b>→</b></a><a class="button ghost" href="#trust">안전 설계 보기 ↓</a></div></section>
     </main>
-    <footer class="wrap"><a class="brand" href="#top"><img class="brand-icon" src="assets/couponcok-icon.png" alt="" /><span>쿠폰콕</span></a><p>CouponCok MVP · Suwon, Korea</p><a href="https://github.com/jhparktime/TicketCock" target="_blank" rel="noreferrer">GitHub ↗</a></footer>
+    <footer class="wrap"><a class="brand" href="#top"><img class="brand-icon" src="assets/couponcok-icon.png" alt="" /><span>쿠폰콕</span></a><p>CouponKok · iOS Personalized Benefit Agent</p><a href="https://github.com/jhparktime/TicketKok" target="_blank" rel="noreferrer">GitHub ↗</a></footer>
   </body>
 </html>
